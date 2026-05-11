@@ -1,0 +1,13 @@
+# Bi-naries
+*.exe
+*.o
+*.out
+
+# Folders to ignore
+output/
+outputs/
+data/
+.vscode/
+
+# Logs
+*.log
