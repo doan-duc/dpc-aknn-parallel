@@ -27,6 +27,34 @@ static inline real_t dist_euclid(const real_t* X, int i, int j, int d) {
     return sqrt(sum);
 }
 
+/* Bình phương khoảng cách Euclid (không sqrt) — dùng để so sánh trong heap.
+ * Vì sqrt() là hàm đơn điệu tăng: a < b ↔ sqrt(a) < sqrt(b)
+ * → thứ tự so sánh hoàn toàn giống với khoảng cách thật. */
+static inline real_t dist_euclid_sq(const real_t* X, int i, int j, int d) {
+    real_t sum = 0.0;
+    for (int p = 0; p < d; p++) {
+        real_t diff = X[i*d+p] - X[j*d+p];
+        sum += diff * diff;
+    }
+    return sum;
+}
+
+/* Bình phương khoảng cách Euclid với Early Exit:
+ * Nếu tổng bình phương từng chiều đã vượt ngưỡng `threshold`,
+ * dừng ngay và trả về giá trị lớn hơn threshold (chắc chắn bị loại).
+ * Kết quả KHÔNG XẤP XỈ: mọi điểm bị cắt sớm đều chắc chắn xa hơn
+ * ngưỡng hiện tại — không bao giờ bỏ sót điểm gần. */
+static inline real_t dist_euclid_sq_early(const real_t* X, int i, int j,
+                                            int d, real_t threshold) {
+    real_t sum = 0.0;
+    for (int p = 0; p < d; p++) {
+        real_t diff = X[i*d+p] - X[j*d+p];
+        sum += diff * diff;
+        if (sum > threshold) return sum; /* Early exit — chắc chắn bị loại */
+    }
+    return sum;
+}
+
 /* ── BƯỚC 1: kNN trực tiếp từ X (không qua D[n×n]) ───────────────────────
  * [DOMAIN] Mỗi luồng tính khoảng cách on-the-fly cho tập điểm của nó.
  * Bộ nhớ: O(n×k) output + O(n) working per thread (thay vì O(n²)). */

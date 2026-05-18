@@ -15,11 +15,11 @@
 
 /* ─── Tham số thuật toán mặc định ──────────────────────────────────────── */
 #define DEFAULT_N_CLUSTERS  10
-#define DEFAULT_K           15
+#define DEFAULT_K           7
 
 /* ─── Cấu hình OpenMP ──────────────────────────────────────────────────── */
 /*  0 = dùng tất cả lõi khả dụng (omp_get_max_threads)                     */
-#define OMP_N_THREADS   8
+#define OMP_N_THREADS   16
 #define OMP_CHUNK_SIZE  64
 
 /* ─── Kiểu dữ liệu dấu phẩy động ──────────────────────────────────────── */

@@ -4,7 +4,7 @@ cd C:\BTL_LTSS\cpu_parallel
 
 # Bước 2: Python vẽ kết quả
 cd utility_functions
-python visualize.py --pred C:\BTL_LTSS\cpu_parallel\output\labels\cpu_labels_20260511_114100.csv --true ../../data/real/fashion-mnist/fashion_mnist_y.csv --data ../../data/real/fashion-mnist/fashion_mnist_X.csv
+python visualize.py --pred C:\BTL_LTSS\cpu_parallel\output\labels\8threads_realdata.csv --true ../../data/real/fashion-mnist/fashion_mnist_y.csv --data ../../data/real/fashion-mnist/fashion_mnist_X.csv
 
 # Chạy dataset spiral
 .\dpc_aknn_cpu.exe --input ../data/artificial/spiral_X.csv --labels ../data/artificial/spiral_y.csv --clusters 2 --k 15

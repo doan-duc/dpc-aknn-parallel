@@ -123,7 +123,7 @@ def main():
     print(f"  n={n}  |  clusters={args.clusters}")
     print(f"{'='*50}")
     for nm, v in metrics.items():
-        bar = "█"*int(v*20) + "░"*(20-int(v*20))
+        bar = "#"*int(v*20) + "-"*(20-int(v*20))
         print(f"  {nm}: {v:.4f}  [{bar}]")
     print(f"{'='*50}\n")
 
