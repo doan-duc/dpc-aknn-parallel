@@ -326,7 +326,6 @@ void step5_build_initial_clusters(int* labels, const int* centers,
                 if (sqrt(dist_to_centroid) > d_c) continue;
 
                 labels[x_q] = c;
-                if (tail < n) queue[tail++] = x_q;
                 core_compute_centroid(X, labels, c, n, d, centroid);
             }
         }

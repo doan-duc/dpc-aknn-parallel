@@ -71,6 +71,7 @@
 
 typedef struct { real_t dist; int idx; } Neighbor;
 
+/* So sanh Neighbor: dist tang dan, tie-break theo idx. */
 static int cmp_neighbor_asc(const void* a, const void* b) {
     const Neighbor* x = (const Neighbor*)a;
     const Neighbor* y = (const Neighbor*)b;
@@ -88,6 +89,7 @@ static int cmp_neighbor_asc(const void* a, const void* b) {
  */
 typedef struct { real_t val; int idx; } ValIdx;
 
+/* So sanh ValIdx: val giam dan, tie-break theo idx. */
 static int cmp_validx_desc(const void* a, const void* b) {
     const ValIdx* x = (const ValIdx*)a;
     const ValIdx* y = (const ValIdx*)b;
@@ -96,6 +98,7 @@ static int cmp_validx_desc(const void* a, const void* b) {
     return x->idx - y->idx; /* tie-break: index nhỏ hơn đứng trước */
 }
 
+/* Tao order[] sap xep giam theo values[]. */
 static void sort_desc_by_value(const real_t* values, int* order, int n) {
     ValIdx* vi = (ValIdx*)malloc((size_t)n * sizeof(ValIdx));
     for (int i = 0; i < n; i++) { vi[i].val = values[i]; vi[i].idx = i; }
@@ -104,6 +107,7 @@ static void sort_desc_by_value(const real_t* values, int* order, int n) {
     free(vi);
 }
 
+/* Selection sort cho n nho, sap xep giam theo values. */
 void core_sort_desc(const real_t* values, int* order, int n) {
     /* [SERIAL] Selection sort — CHỈ dùng khi n nhỏ (n_clusters ≤ 20). */
     for (int i = 0; i < n; i++) order[i] = i;
@@ -115,6 +119,7 @@ void core_sort_desc(const real_t* values, int* order, int n) {
             }
 }
 
+/* Tinh centroid cua mot cum tu labels va X. */
 void core_compute_centroid(const real_t* X, const int* labels,
                             int cluster_id, int n, int d, real_t* centroid) {
     /* [SERIAL] Giữ nguyên — giao diện công khai, không gọi trong BFS nữa. */
@@ -136,6 +141,7 @@ void core_compute_centroid(const real_t* X, const int* labels,
  * Complexity: O(n log k) thay O(n log n) của qsort toàn bộ.
  * k=15, n=70000: tiết kiệm ~4.2× phép so sánh.
  */
+/* Sift-down de khoi phuc tinh chat max-heap. */
 static void heap_sift_down(Neighbor* h, int size, int i) {
     while (1) {
         int largest = i;
@@ -152,6 +158,7 @@ static void heap_sift_down(Neighbor* h, int size, int i) {
     }
 }
 
+/* Chen phan tu vao max-heap. */
 static void heap_push(Neighbor* h, int* size, Neighbor val) {
     int i = (*size)++;
     h[i] = val;
@@ -165,6 +172,7 @@ static void heap_push(Neighbor* h, int* size, Neighbor val) {
     }
 }
 
+/* Thay root va khoi phuc max-heap. */
 static void heap_replace_root(Neighbor* h, int size, Neighbor val) {
     h[0] = val;
     heap_sift_down(h, size, 0);
@@ -172,6 +180,7 @@ static void heap_replace_root(Neighbor* h, int size, Neighbor val) {
 
 /* ── BƯỚC 1: kNN trực tiếp từ X ─────────────────────────────────────────── */
 
+/* Tinh kNN bang max-heap va early-exit. */
 void step1_compute_knn(const real_t* X, int* knn_idx, real_t* knn_dist,
                         int n, int d, int k) {
     /*
@@ -249,6 +258,7 @@ void step1_compute_knn(const real_t* X, int* knn_idx, real_t* knn_dist,
 
 /* ── BƯỚC 2: d_c ────────────────────────────────────────────────────────── */
 
+/* Tinh d_c thich ung tu knn_dist cua tung diem. */
 real_t step2_compute_dc(const real_t* knn_dist, int n, int k) {
     /* [DOMAIN + SERIAL] Giữ nguyên. */
     real_t* d_ci = (real_t*)malloc((size_t)n * sizeof(real_t));
@@ -282,6 +292,7 @@ real_t step2_compute_dc(const real_t* knn_dist, int n, int k) {
 
 /* ── BƯỚC 3a: ρ ─────────────────────────────────────────────────────────── */
 
+/* Tinh mat do cuc bo rho tu knn_dist va d_c. */
 void step3a_compute_rho(const real_t* knn_dist,
                          real_t* rho, real_t d_c, int n, int k) {
     /* [DOMAIN] Giữ nguyên. */
@@ -299,6 +310,7 @@ void step3a_compute_rho(const real_t* knn_dist,
 
 /* ── BƯỚC 3b: δ ─────────────────────────────────────────────────────────── */
 
+/* Tinh delta: khoang cach toi diem co mat do cao hon gan nhat. */
 void step3b_compute_delta(const real_t* X, const real_t* rho,
                            real_t* delta, int n, int d) {
     /*
@@ -345,6 +357,7 @@ void step3b_compute_delta(const real_t* X, const real_t* rho,
 
 /* ── BƯỚC 4: Chọn tâm cụm ───────────────────────────────────────────────── */
 
+/* Tinh gamma va chon top tam cum. */
 void step4_select_centers(const real_t* rho, const real_t* delta,
                            real_t* gamma_out,
                            int n, int n_clusters, int* centers_out) {
@@ -361,6 +374,7 @@ void step4_select_centers(const real_t* rho, const real_t* delta,
 
 /* ── BƯỚC 5: Cụm nòng cốt ban đầu ───────────────────────────────────────── */
 
+/* Xay cum ban dau: one-hop + kiem tra centroid. */
 void step5_build_initial_clusters(int* labels, const int* centers,
                                    const real_t* X,
                                    const int* knn_idx,
@@ -368,8 +382,8 @@ void step5_build_initial_clusters(int* labels, const int* centers,
                                    real_t d_c,
                                    int n, int d, int k, int n_clusters) {
     /*
-     * [SERIAL] BFS — giữ serial (thứ tự claim điểm là tính chất thuật toán,
-     * song song hóa làm ARI giảm từ 0.407 → 0.376 qua thực nghiệm).
+     * [SERIAL] One-hop expansion — chỉ xét kNN của center và kNN của
+     * các điểm seed, không enqueue điểm mới nhận để tránh lan rộng đệ quy.
      *
      * [FIX-3] Incremental centroid O(d) thay core_compute_centroid O(n):
      *   Duy trì csum[d] = tổng tọa độ các điểm đã nhận, cnt = số điểm.
@@ -397,10 +411,9 @@ void step5_build_initial_clusters(int* labels, const int* centers,
         }
 
         int head = 0, tail = 0;
-        /* [FIX-E] Khôi phục bridge node behavior từ v1:
-         * Enqueue TẤT CẢ k láng giềng (kể cả đã labeled) để giữ khả năng
-         * bridge — láng giềng unlabeled của bridge node vẫn có thể được
-         * claim vào cụm hiện tại. Chỉ gán label + update csum cho unlabeled. */
+        /* [FIX-E] Giữ tập seed đầy đủ từ v1:
+         * Enqueue TẤT CẢ k láng giềng của center (kể cả đã labeled) để
+         * đảm bảo các điểm seed không bị bỏ sót. Không lan rộng đệ quy. */
         for (int t = 0; t < k; t++) {
             int nb = knn_idx[center * k + t];
             if (labels[nb] == -1) {
@@ -408,7 +421,7 @@ void step5_build_initial_clusters(int* labels, const int* centers,
                 for (int p = 0; p < d; p++) csum[p] += X[nb*d+p]; /* [FIX-3] O(d) */
                 cnt++;
             }
-            queue[tail++] = nb; /* unconditional enqueue — giữ bridge behavior v1 */
+            queue[tail++] = nb; /* seed queue: chỉ chứa kNN của center */
         }
         /* Centroid ban đầu từ csum — O(d) */
         if (cnt > 0)
@@ -434,7 +447,6 @@ void step5_build_initial_clusters(int* labels, const int* centers,
                 if (sqrt(dist_sq) > d_c) continue;
 
                 labels[x_q] = c;
-                if (tail < n) queue[tail++] = x_q;
 
                 /* [FIX-3] Incremental update — không gọi core_compute_centroid */
                 for (int p = 0; p < d; p++) csum[p] += X[x_q*d+p];
@@ -465,6 +477,7 @@ void step5_build_initial_clusters(int* labels, const int* centers,
  *   rknn_data[] read-only sau build → không conflict.
  */
 
+/* Gan nhan con lai bang A va cap nhat theo rknn. */
 void step6_association_loop(int* labels, const int* knn_idx,
                              const real_t* knn_dist, const real_t* rho,
                              int n, int k, int n_clusters) {
@@ -571,6 +584,7 @@ cleanup_step6:
 
 /* ── BƯỚC 7: Bầu chọn sửa lỗi ──────────────────────────────────────────── */
 
+/* Bieu quyet nhan bang kNN, dung double-buffering. */
 void step7_reallocate_by_voting(int* labels, const real_t* rho,
                                  const int* knn_idx,
                                  const real_t* knn_dist,
@@ -655,6 +669,7 @@ void step7_reallocate_by_voting(int* labels, const real_t* rho,
 
 /* ── BƯỚC 8: Vét cạn ngoại lai ──────────────────────────────────────────── */
 
+/* Gan nhan cuoi: chon cum co mean distance nho nhat. */
 void step8_allocate_remaining(int* labels, const int* knn_idx,
                                const real_t* knn_dist,
                                int n, int k, int n_clusters) {

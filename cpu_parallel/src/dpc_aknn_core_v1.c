@@ -213,7 +213,8 @@ void step5_build_initial_clusters(int* labels, const int* centers,
                                    real_t d_c,
                                    int n, int d, int k, int n_clusters) {
     /*
-     * [SERIAL] BFS — phụ thuộc nhãn vừa gán, không thể song song.
+     * [SERIAL] One-hop expansion — chỉ xét kNN của center và kNN của các seed.
+     * Không enqueue điểm mới nhận để tránh lan rộng đệ quy.
      *
      * Không cần D:
      *   - Điều kiện 2 (d_pq ≤ mean kNN): dùng knn_dist[x_p*k+t] trực tiếp.
@@ -236,7 +237,7 @@ void step5_build_initial_clusters(int* labels, const int* centers,
         }
         core_compute_centroid(X, labels, c, n, d, centroid);
 
-        while (head < tail) { // Loang cụm bằng BFS
+        while (head < tail) { // Xet hang doi seed
             int x_p = queue[head++];
 
             /* Tính mean khoảng cách kNN của x_p (điều kiện 2) */
@@ -262,7 +263,6 @@ void step5_build_initial_clusters(int* labels, const int* centers,
                 if (sqrt(dist_to_centroid) > d_c) continue;
 
                 labels[x_q] = c; // Gán nhãn cụm
-                if (tail < n) queue[tail++] = x_q; // Thêm vào queue để loang tiếp
                 core_compute_centroid(X, labels, c, n, d, centroid); // Cập nhật centroid
             }
         }

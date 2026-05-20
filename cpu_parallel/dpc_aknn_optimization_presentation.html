@@ -33,6 +33,20 @@
             color: #fff
         }
 
+        body.cover-active {
+            background:
+                linear-gradient(90deg, rgba(0, 243, 255, .09) 1px, transparent 1px),
+                linear-gradient(0deg, rgba(0, 243, 255, .06) 1px, transparent 1px),
+                radial-gradient(circle at 78% 22%, rgba(0, 243, 255, .18), transparent 32%),
+                radial-gradient(circle at 86% 90%, rgba(255, 51, 102, .14), transparent 30%),
+                #06070c;
+            background-size: 44px 44px, 44px 44px, 100% 100%, 100% 100%, 100% 100%
+        }
+
+        body.cover-active .reveal {
+            background: transparent !important
+        }
+
         .reveal {
             font-size: 20px
         }
@@ -216,6 +230,29 @@
             position: relative
         }
 
+        .fit-chart-slide .sl {
+            min-height: 0;
+            height: 520px;
+            align-items: stretch;
+        }
+
+        .fit-chart-slide .sl>div {
+            overflow: hidden;
+        }
+
+        .fit-chart-slide .chart-box {
+            box-sizing: border-box;
+            min-height: 0;
+            height: 100%;
+        }
+
+        .fit-chart-slide .chart-box canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+            max-height: 100% !important;
+        }
+
         .two-col {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -226,6 +263,260 @@
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
             gap: 12px
+        }
+
+        .reveal .slides section.title-slide {
+            padding: 0 !important
+        }
+
+        .title-cover {
+            position: relative;
+            box-sizing: border-box;
+            width: 1200px;
+            height: 700px;
+            overflow: hidden;
+            border: 0;
+            border-radius: 0;
+            padding: 42px 64px 38px;
+            display: grid;
+            grid-template-rows: minmax(0, 1fr) auto;
+            gap: 22px;
+            background:
+                linear-gradient(90deg, rgba(0, 243, 255, .09) 1px, transparent 1px),
+                linear-gradient(0deg, rgba(0, 243, 255, .06) 1px, transparent 1px),
+                radial-gradient(circle at 78% 18%, rgba(0, 243, 255, .16), transparent 32%),
+                #06070c;
+            background-size: 44px 44px, 44px 44px, 100% 100%, 100% 100%;
+            box-shadow: inset 0 0 92px rgba(0, 0, 0, .92)
+        }
+
+        .title-cover::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                linear-gradient(115deg, transparent 0 18%, rgba(0, 243, 255, .18) 19%, transparent 20% 54%, rgba(255, 51, 102, .16) 55%, transparent 56%),
+                linear-gradient(180deg, transparent, rgba(0, 0, 0, .38));
+            transform: translateX(-18%);
+            animation: cover-scan 7s linear infinite;
+            pointer-events: none
+        }
+
+        .title-cover::after {
+            content: "";
+            position: absolute;
+            right: -40px;
+            bottom: -60px;
+            width: 430px;
+            height: 270px;
+            border: 2px solid rgba(255, 51, 102, .38);
+            border-radius: 50%;
+            transform: rotate(-16deg);
+            box-shadow: 0 0 30px rgba(255, 51, 102, .2);
+            pointer-events: none
+        }
+
+        .cover-layout {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: 1.18fr .82fr;
+            gap: 34px;
+            min-height: 0;
+            align-items: center
+        }
+
+        .cover-kicker {
+            color: var(--nb);
+            font-family: 'Fira Code', monospace;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 18px;
+            animation: cover-rise .7s ease-out both
+        }
+
+        .cover-title {
+            display: block;
+            width: max-content;
+            max-width: 100%;
+            font-size: 2.55em !important;
+            line-height: 1.04 !important;
+            margin: 0 !important;
+            color: #fff;
+            text-align: center !important;
+            text-shadow: 0 0 18px rgba(0, 243, 255, .35);
+            animation: cover-rise .7s ease-out .08s both
+        }
+
+        .cover-title .title-main {
+            display: block;
+            width: 100%;
+            text-align: center !important;
+            white-space: nowrap;
+            font-size: .78em;
+        }
+
+        .cover-title .accent {
+            display: block;
+            width: 100%;
+            text-align: center !important;
+            white-space: nowrap;
+            color: var(--nr);
+            text-shadow: 0 0 18px rgba(255, 51, 102, .45)
+        }
+
+        .cover-subtitle {
+            margin-top: 14px;
+            color: #ffdede;
+            font-size: 1.12em;
+            font-style: italic;
+            font-weight: 700;
+            animation: cover-rise .7s ease-out .16s both
+        }
+
+        .cover-meta {
+            margin-top: 24px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            color: #bbb;
+            font-size: .82em;
+            animation: cover-rise .7s ease-out .24s both
+        }
+
+        .cover-meta span {
+            border: 1px solid rgba(255, 255, 255, .14);
+            border-radius: 999px;
+            padding: 7px 12px;
+            background: rgba(255, 255, 255, .05)
+        }
+
+        .cover-chip {
+            width: 120px;
+            height: 120px;
+            display: grid;
+            place-items: center;
+            margin: 0 auto 16px;
+            color: var(--nb);
+            border: 2px solid rgba(0, 243, 255, .35);
+            border-radius: 30px;
+            background: rgba(0, 243, 255, .08);
+            box-shadow: 0 0 32px rgba(0, 243, 255, .38);
+            animation: chip-pulse 2.2s ease-in-out infinite
+        }
+
+        .cover-chip i {
+            font-size: 3.55em
+        }
+
+        .team-card {
+            position: relative;
+            padding: 18px;
+            border-radius: 16px;
+            background: rgba(10, 10, 16, .82);
+            border: 1px solid rgba(255, 255, 255, .16);
+            box-shadow: 0 18px 46px rgba(0, 0, 0, .42);
+            animation: cover-rise .7s ease-out .32s both
+        }
+
+        .team-card h3 {
+            margin: 0 0 10px !important;
+            text-align: left;
+            color: var(--nb)
+        }
+
+        .team-list {
+            display: grid;
+            gap: 7px;
+            font-size: .84em
+        }
+
+        .team-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, .045);
+            border-left: 3px solid rgba(255, 51, 102, .8)
+        }
+
+        .team-id {
+            color: var(--ny);
+            font-family: 'Fira Code', monospace;
+            white-space: nowrap
+        }
+
+        .cover-versions {
+            position: relative;
+            z-index: 2;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px
+        }
+
+        .cover-version {
+            text-align: center;
+            padding: 13px 16px;
+            border-radius: 14px;
+            background: rgba(7, 7, 12, .86);
+            border: 1px solid rgba(255, 255, 255, .14);
+            box-shadow: 0 14px 36px rgba(0, 0, 0, .45);
+            animation: cover-rise .7s ease-out both
+        }
+
+        .cover-version:nth-child(1) {
+            animation-delay: .42s
+        }
+
+        .cover-version:nth-child(2) {
+            animation-delay: .52s
+        }
+
+        .cover-version:nth-child(3) {
+            animation-delay: .62s
+        }
+
+        .cover-version p {
+            margin: 4px 0 0;
+            font-size: .86em;
+            color: #ddd
+        }
+
+        @keyframes cover-rise {
+            from {
+                opacity: 0;
+                transform: translateY(18px)
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
+
+        @keyframes chip-pulse {
+            0%,
+            100% {
+                transform: translateY(0) scale(1);
+                box-shadow: 0 0 28px rgba(0, 243, 255, .34)
+            }
+
+            50% {
+                transform: translateY(-6px) scale(1.04);
+                box-shadow: 0 0 52px rgba(0, 243, 255, .62)
+            }
+        }
+
+        @keyframes cover-scan {
+            from {
+                transform: translateX(-28%)
+            }
+
+            to {
+                transform: translateX(28%)
+            }
         }
 
         .katex {
@@ -247,22 +538,37 @@
         <div class="slides">
 
             <!-- ==================== SLIDE 1: TITLE ==================== -->
-            <section>
-                <div style="text-align:center;margin-bottom:24px">
-                    <i class="fa-solid fa-microchip tb" style="font-size:5em"></i>
-                </div>
-                <h1 style="text-align:center" class="tb">DPC-AKNN CORE</h1>
-                <h3 style="text-align:center;color:#ccc">Báo cáo Tối ưu hóa Song song — OpenMP trên CPU đa nhân</h3>
-                <p style="text-align:center;color:#888;margin-top:20px">
-                    <i class="fa-solid fa-server"></i> Intel Core i7-10700K · 8 Cores / 16 Threads · Fashion-MNIST
-                    70,000×784
-                </p>
-                <div style="text-align:center;margin-top:30px" class="three-col">
-                    <div class="gp" style="text-align:center"><span class="vt vt-1">Version 1</span><br>Baseline
-                        parallel</div>
-                    <div class="gp" style="text-align:center"><span class="vt vt-2">Version 2</span><br>Fix contention
+            <section class="title-slide">
+                <div class="title-cover">
+                    <div class="cover-layout">
+                        <div>
+                            <div class="cover-kicker">OpenMP Parallel Optimization Report</div>
+                            <h1 class="cover-title"><span class="title-main">Song song hóa Thuật toán</span><span class="accent">DPC-AKNN</span></h1>
+                            <div class="cover-subtitle">Density Peak Clustering based on Alternate kNN</div>
+                            <div class="cover-meta">
+                                <span><i class="fa-solid fa-server"></i> Intel Core i7-10700K</span>
+                                <span>8 Cores / 16 Threads</span>
+                                <span>Fashion-MNIST 70,000×784</span>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="cover-chip"><i class="fa-solid fa-microchip"></i></div>
+                            <div class="team-card">
+                                <h3><i class="fa-solid fa-users"></i> Nhóm thực hiện</h3>
+                                <div class="team-list">
+                                    <div class="team-row"><span>Vũ Việt Anh</span><span class="team-id">20233996</span></div>
+                                    <div class="team-row"><span>Đoàn Sinh Đức</span><span class="team-id">20234000</span></div>
+                                    <div class="team-row"><span>Nguyễn Minh Đức</span><span class="team-id">20234001</span></div>
+                                    <div class="team-row"><span>Vũ Mạnh Quân</span><span class="team-id">20234033</span></div>
+                                    <div class="team-row"><span>Kiều Việt Hoàng</span><span class="team-id">20236179</span></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="gp" style="text-align:center"><span class="vt vt-f">Optimized</span><br>Algorithmic + HW
+                    <div class="cover-versions">
+                        <div class="cover-version"><span class="vt vt-1">Version 1</span><p>Baseline parallel</p></div>
+                        <div class="cover-version"><span class="vt vt-2">Version 2</span><p>Fix contention</p></div>
+                        <div class="cover-version"><span class="vt vt-f">Optimized</span><p>Algorithmic + Hardware</p></div>
                     </div>
                 </div>
             </section>
@@ -407,7 +713,7 @@
                                 cách</li>
                             <li><i class="fa-solid fa-database"></i> Mỗi phép tính cần duyệt 784 chiều</li>
                             <li><i class="fa-solid fa-link"></i> Tất cả bước sau đều phụ thuộc kNN output</li>
-                            <li><i class="fa-solid fa-bolt tg"></i> Song song hóa tốt bước này = thắng lớn</li>
+                            <li><i class="fa-solid fa-bolt tg"></i> Song song hóa tốt bước này sẽ tối ưu</li>
                         </ul>
                         <div class="math-block" style="margin-top:12px">
                             <span style="color:var(--nr)">T₁(v1) = 3647s</span> &nbsp;→&nbsp;
@@ -656,7 +962,7 @@
                 </div>
             </section>
 
-            <section>
+            <section class="fit-chart-slide">
                 <h2 class="tp">Bước 3b — Tiến hóa qua 3 Phiên bản</h2>
                 <div class="sl">
                     <div class="gp">
@@ -752,8 +1058,7 @@
                         <ul class="cl">
                             <li><i class="fa-solid fa-calculator tg"></i> <b>[FIX-3]:</b> Incremental centroid O(d) thay
                                 O(n): <code>csum+=X[q]</code></li>
-                            <li><i class="fa-solid fa-circle-nodes tg"></i> <b>[FIX-E]:</b> Khôi phục bridge node —
-                                enqueue tất cả láng giềng</li>
+                            
                             <li><i class="fa-solid fa-bolt tg"></i> 16.6s → <b>0.032s</b> — nhanh hơn <b>519×</b></li>
                         </ul>
                     </div>
@@ -801,7 +1106,7 @@
                         <span class="vt vt-f" style="margin-top:8px">Optimized [FIX-F]</span>
                         <ul class="cl">
                             <li><i class="fa-solid fa-crosshairs tg"></i> <b>Reverse-kNN index:</b> rknn[j] = {i :
-                                j∈kNN(i)}</li>
+                                j∈kNN(i)} danh sách tất cả các điểm i coi j là láng giềng</li>
                             <li><i class="fa-solid fa-bolt tg"></i> Chỉ update cột r* cho u∈rknn[best_pt]</li>
                             <li><i class="fa-solid fa-rocket tg"></i> 31.223s → <b>0.070s</b> — nhanh hơn <b>446×</b>
                             </li>
@@ -839,13 +1144,11 @@
                     </div>
                     <div class="gp">
                         <h3 class="tr">Vấn đề qua các version</h3>
-                        <span class="vt vt-1">v1</span>
+                        <span class="vt vt-1">v1, v2</span>
                         <ul class="cl">
-                            <li><i class="fa-solid fa-sort tr"></i> <b>[FIX-1]:</b> core_sort_desc O(n²) cho sort ρ</li>
-                            <li><i class="fa-solid fa-lock tr"></i> <b>[FIX-2]:</b> calloc/free trong parallel → heap
+                            <li><i class="fa-solid fa-sort tr"></i> <b>[FIX-1]:</b> selection sort O(n²) cho sort ρ</li>
+                            <li><i class="fa-solid fa-lock tr"></i> <b>[FIX-2]:</b> calloc/free cho là mảng đếm nhãn trong kNN cho từng điểm khi votetrong parallel → heap
                                 lock</li>
-                            <li><i class="fa-solid fa-microchip tr"></i> <b>[FIX-G]:</b> counts[] n_clusters=10 → 40B <
-                                    64B cache line → false sharing</li>
                         </ul>
                         <span class="vt vt-f" style="margin-top:8px">Optimized</span>
                         <ul class="cl">
@@ -859,12 +1162,6 @@
             <section>
                 <h2 class="tp">Bước 7 — Thời gian Bầu chọn (1→16 threads)</h2>
                 <div class="chart-box" style="height:65vh"><canvas id="chart-s7-time" width="1000"
-                        height="500"></canvas></div>
-            </section>
-
-            <section>
-                <h2 class="tp">Bước 7 — Speedup Bầu chọn (1→16 threads)</h2>
-                <div class="chart-box" style="height:65vh"><canvas id="chart-s7-speedup" width="1000"
                         height="500"></canvas></div>
             </section>
 
@@ -903,7 +1200,7 @@
 
             <!-- ==================== KẾT LUẬN ============================== -->
             <section>
-                <h2 class="tp">Tổng kết — Speedup từng Bước (16 threads)</h2>
+                <h2 class="tp">Tổng kết — Thời gian từng Bước (16 threads)</h2>
                 <div class="chart-box" style="height:65vh">
                     <canvas id="chart-summary-bar" width="1000" height="500"></canvas>
                 </div>
@@ -924,7 +1221,7 @@
                                     class="tg">61.3%</b></li>
                         </ul>
                         <p style="font-size:.85em;color:#888;margin-top:10px">E(p)=100% là lý tưởng (mỗi core đóng góp
-                            tuyến tính). Optimized đạt 61% nhờ giảm serial fraction f từ 69% → 0.4%</p>
+                            tuyến tính). Optimized đạt 61% nhờ giảm serial fraction f từ 69% → 4%</p>
                     </div>
                     <div class="chart-box">
                         <canvas id="chart-efficiency" width="500" height="400"></canvas>
@@ -985,7 +1282,7 @@
                             </tr>
                         </table>
                         <div class="math-block" style="margin-top:16px">
-                            Serial fraction: 69% → 66% → <b class="tg">0.4%</b>
+                            Serial fraction qua 3 phiên bản cải tiến: 69% → 66% → <b class="tg">4%</b>
                         </div>
                     </div>
                 </div>
@@ -994,17 +1291,18 @@
             <section>
                 <div style="text-align:center;margin-bottom:20px"><i class="fa-solid fa-award tg"
                         style="font-size:5em"></i></div>
-                <h1 style="text-align:center" class="tg">HOÀN TẤT</h1>
+                <h1 style="text-align:center" class="tg">CẢM ƠN ĐÃ CHÚ Ý LẮNG NGHE</h1>
                 <div class="gp" style="text-align:center;max-width:800px;margin:20px auto">
-                    <h3 class="tb">Tối ưu hóa Song song DPC-AKNN trên CPU đa nhân</h3>
+                    <h3 class="tb">Tối ưu hóa Song song DPC-AKNN trên Intel Core i7-10700K</h3>
                     <p style="font-size:1.1em;margin-top:12px">
                         Giải quyết triệt để OOM RAM · Loại trừ Lock Contention ·
                         Tối ưu thuật toán O(n²)→O(n log n) · Cache Padding 64B ·
                         Reverse-kNN Index · Incremental Centroid
                     </p>
                     <div class="math-block" style="margin-top:16px;font-size:1.2em">
-                        <span class="tr">5071s</span> → <span class="tg">386s</span> &nbsp;|&nbsp;
-                        Speedup <span class="tg">13.1×</span> tổng thể (v1@1T → opt@16T)
+                        <span class="tr">3781s</span> → <span class="tg">386s</span> &nbsp;|&nbsp;
+                        Speedup <span class="tg">9.8×</span> tổng thể (1T → 16T) &nbsp;|&nbsp;
+                        Efficiency <span class="tg">61%</span>
                     </div>
                 </div>
             </section>
@@ -1014,7 +1312,14 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/reveal.min.js"></script>
     <script>
-        Reveal.initialize({ width: 1200, height: 700, margin: .08, hash: true, transition: 'slide', backgroundTransition: 'fade', controls: true, progress: true, center: true });
+        Reveal.initialize({ width: 1200, height: 700, margin: 0, hash: true, transition: 'slide', backgroundTransition: 'fade', controls: true, progress: true, center: true });
+        function syncCoverBackground() {
+            var current = Reveal.getCurrentSlide();
+            document.body.classList.toggle('cover-active', !!current && current.classList.contains('title-slide'));
+        }
+        Reveal.on('ready', syncCoverBackground);
+        Reveal.on('slidechanged', syncCoverBackground);
+        syncCoverBackground();
         // ===== KaTeX =====
         function rm(id, tex) { var e = document.getElementById(id); if (e) katex.render(tex, e, { displayMode: true, throwOnError: false }); }
         rm('math-amdahl', 'S(p)=\\frac{1}{f+\\frac{1-f}{p}}');
@@ -1099,7 +1404,6 @@
                 case 'chart-s6-time': ch(id, TL, [ds('v1', v1s6, cB), ds('v2', v2s6, cY), ds('Opt', os6, cG)], 'Bước 6 Ma trận A (Log Scale)', 'Giây', null, true); break;
                 case 'chart-s6-speedup': ch(id, TL, [ds('Ideal', ideal, cP, [5, 5]), ds('v1', sp(v1s6), cB), ds('v2', sp(v2s6), cY)], 'Bước 6 Speedup', '×'); break;
                 case 'chart-s7-time': ch(id, TL, [dsBar('v1', v1s7, cB), dsBar('v2', v2s7, cY), dsBar('Opt', os7, cG)], 'Bước 7 Bầu chọn (Log Scale)', 'Giây', 'bar', true); break;
-                case 'chart-s7-speedup': ch(id, TL, [ds('Ideal', ideal, cP, [5, 5]), ds('v1', sp(v1s7), cB), ds('v2', sp(v2s7), cY)], 'Bước 7 Speedup', '×'); break;
                 case 'chart-summary-bar':
                     var st = ['B1 kNN', 'B2 d_c', 'B3a ρ', 'B3b δ', 'B4', 'B5', 'B6', 'B7', 'B8'];
                     ch(id, st, [dsBar('v1@16T', [478, 0.03, 0.04, 726, 10, 17, 31, 10, 0.001], cB), dsBar('v2@16T', [420, 0.001, 0.001, 721, 10, 17, 23, 10, 0.001], cY), dsBar('Opt@16T', [228, 0.001, 0.001, 157, 0.02, 0.033, 0.07, 0.018, 0.001], cG)], 'Thời gian @ 16 threads (Log Scale)', 'Giây', 'bar', true); break;
