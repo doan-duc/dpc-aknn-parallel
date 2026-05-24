@@ -1,30 +1,39 @@
-NVCC    = nvcc
+ifeq ($(OS),Windows_NT)
+    # Cấu hình dành cho Windows
+    EXE = .exe
+    RM = del /Q /F
+    NVCC = nvcc
+    # Lệnh clean trên Windows dùng dấu xoẹt ngược \ và lệnh del
+    CLEAN_CMD = $(RM) $(TARGET)$(EXE) output\labels\*.csv 2>NUL || exit 0
+else
+    # Cấu hình dành cho Linux
+    EXE =
+    RM = rm -f
+    CUDA_HOME ?= /usr/local/cuda
+    NVCC ?= $(shell command -v nvcc 2>/dev/null || \
+                if [ -x "$(CUDA_HOME)/bin/nvcc" ]; then printf "%s" "$(CUDA_HOME)/bin/nvcc"; \
+                else printf "%s" nvcc; fi)
+    CLEAN_CMD = $(RM) $(TARGET) *.exe output/labels/*.csv
+endif
+
 NVFLAGS = -O3 -std=c++14
 LIBS    = -lcublas
 
 TARGET  = dpc_aknn_gpu
-TEST    = test_dpc_aknn_gpu
 
 SRCDIR  = src
 SRCS      = $(SRCDIR)/main.cu \
 			$(SRCDIR)/dpc_aknn.cu \
 			$(SRCDIR)/kernels.cu \
 			$(SRCDIR)/utils_gpu.cu
-TEST_SRCS = $(SRCDIR)/test_dpc_aknn.cu \
-			$(SRCDIR)/dpc_aknn.cu \
-			$(SRCDIR)/kernels.cu \
-			$(SRCDIR)/utils_gpu.cu
 
-.PHONY: all test clean
+.PHONY: all clean
 
-all: $(TARGET)
+all: $(TARGET)$(EXE)
 
-$(TARGET): $(SRCS)
+$(TARGET)$(EXE): $(SRCS)
 	$(NVCC) $(NVFLAGS) -o $@ $^ $(LIBS)
 
-test: $(TEST_SRCS)
-	$(NVCC) $(NVFLAGS) -o $(TEST) $^ $(LIBS)
-	./$(TEST)
-
 clean:
-	rm -f $(TARGET) $(TEST) *.exe output/labels/*.csv
+	$(CLEAN_CMD)
+

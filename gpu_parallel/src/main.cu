@@ -81,8 +81,8 @@ static void run_input(const char* filepath, const char* labelpath, int n_cluster
 
 int main(int argc, char** argv) {
     ensure_output_dirs();
-    char* input_file = NULL;
-    char* label_file = NULL;
+    const char* input_file = NULL;
+    const char* label_file = NULL;
     int n_clusters = DEFAULT_N_CLUSTERS;
     int k_val = DEFAULT_K;
 
@@ -94,8 +94,16 @@ int main(int argc, char** argv) {
     }
 
     if (!input_file) {
-        printf("Su dung: ./dpc_aknn_gpu --input <file.csv> [--labels <file.csv>] [--clusters <int>] [--k <int>]\n");
-        return 1;
+        input_file = DEFAULT_INPUT_FILE;
+        if (!label_file) {
+            label_file = DEFAULT_LABEL_FILE;
+        }
+        printf("[System] Khong co doi so dau vao. Su dung cau hinh mac dinh trong config.h:\n");
+        printf("         Data    : %s\n", input_file);
+        if (label_file) {
+            printf("         Labels  : %s\n", label_file);
+        }
+        printf("         Clusters: %d, K: %d\n\n", n_clusters, k_val);
     }
 
     run_input(input_file, label_file, n_clusters, k_val);

@@ -1,31 +1,28 @@
 # DPC-AKNN GPU (Windows)
 
-Phiên bản CUDA C của thuật toán DPC-AKNN được tối ưu hóa lai giữa GPU và CPU (Hybrid Parallelization) trên môi trường Windows.
-
-## Hướng dẫn Biên dịch (Compile)
-Đảm bảo bạn đã cài đặt CUDA Toolkit và MSVC (Microsoft Visual Studio C++ Compiler).
-Mở PowerShell, khai báo biến môi trường cho MSVC (đường dẫn có thể khác tùy máy), sau đó sử dụng `mingw32-make` để biên dịch:
-
+### 1. Biên dịch (Compile)
+Mở **Developer PowerShell for VS 2022** tại thư mục này và chạy:
 ```powershell
-# Nạp biến môi trường MSVC (Sửa đường dẫn nếu cần)
-$env:PATH += ";C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64"
-
-# Dọn dẹp và biên dịch
+# Dọn dẹp các file build cũ
 mingw32-make clean
+
+# Biên dịch chương trình
 mingw32-make
 ```
 
-## Hướng dẫn Chạy Test (Run)
-Chương trình sử dụng **đường dẫn tương đối** (relative paths) giúp bạn có thể chạy trên bất kỳ máy nào chứa project mà không bị lỗi đường dẫn cứng.
+*(Lưu ý: Nếu dùng PowerShell thường, cần nạp đường dẫn chứa `cl.exe` của MSVC trước, ví dụ: `$env:PATH += ";C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.40.33807\bin\Hostx64\x64"` rồi mới chạy hai lệnh trên).*
 
-Ví dụ chạy test với tập dữ liệu Fashion-MNIST trên Windows:
+### 2. Chạy chương trình (Run)
+
+**Cách 1: Chạy bằng cấu hình mặc định (được thiết lập trong file `config.h`)**
+```powershell
+.\dpc_aknn_gpu.exe
+```
+
+**Cách 2: Chạy và truyền tham số trực tiếp từ dòng lệnh**
 ```powershell
 .\dpc_aknn_gpu.exe --input ..\data\real\fashion-mnist\fashion_mnist_X.csv --labels ..\data\real\fashion-mnist\fashion_mnist_y.csv --clusters 10 --k 15
 ```
 
-## Kết quả và Log (Logging & Profiling)
-Trong quá trình chạy, màn hình console sẽ hiển thị **thời gian thực thi cực kì chi tiết theo từng bước** (kNN, d_c, rho, delta, BFS, Ma trận liên kết A, Voting...).
-Kết thúc quá trình, chương trình in ra bảng tổng kết với:
-- **Tổng thời gian chạy** toàn bộ pipeline thuật toán.
-- **Các chỉ số độ chính xác:** ARI (Adjusted Rand Index), NMI (Normalized Mutual Info), ACC (Clustering Accuracy).
-- Toàn bộ nội dung console và nhãn dự đoán sẽ được tự động lưu ra file vào các thư mục `output/logs/` và `output/labels/`.
+
+

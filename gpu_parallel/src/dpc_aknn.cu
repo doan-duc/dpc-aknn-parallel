@@ -516,11 +516,8 @@ void dpcaknn_gpu_fit(DPCAKNN_GPU* model, const float* h_X, int n, int d) {
     compute_norms_kernel<<<grid, block>>>(model->d_X, d_norms, n, d);
     CUDA_CHECK(cudaGetLastError());
 
-    /* Batch size for GEMM: inner buffer = bs × n × 4 bytes */
-    int gemm_bs = GPU_BATCH_SIZE;  /* from config.h, default 5000 */
-    /* Ensure batch fits in ~1.5 GB: bs < 1.5GB / (n*4) */
-    while ((size_t)gemm_bs * (size_t)n * sizeof(float) > (size_t)1500 * 1024 * 1024 && gemm_bs > 1000)
-        gemm_bs /= 2;
+    /* Batch size for GEMM: inner buffer = bs × n × 4 bytes (Exactly respected from config.h) */
+    int gemm_bs = GPU_BATCH_SIZE;  
     float* d_inner = (float*)gpu_malloc_check((size_t)gemm_bs * (size_t)n * sizeof(float), "d_inner");
     log_printf("[DPC-AKNN] cuBLAS GEMM batch size: %d (inner buffer: %.1f MB)\n",
                gemm_bs, (double)gemm_bs * n * sizeof(float) / (1024.0 * 1024.0));
