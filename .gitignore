@@ -11,3 +11,7 @@ data/
 
 # Logs
 *.log
+
+# HTML Files
+*.html
+
