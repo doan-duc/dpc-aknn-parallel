@@ -19,10 +19,5 @@ mingw32-make
 .\dpc_aknn_gpu.exe
 ```
 
-**Cách 2: Chạy và truyền tham số trực tiếp từ dòng lệnh**
-```powershell
-.\dpc_aknn_gpu.exe --input ..\data\real\fashion-mnist\fashion_mnist_X.csv --labels ..\data\real\fashion-mnist\fashion_mnist_y.csv --clusters 10 --k 15
-```
-
 
 

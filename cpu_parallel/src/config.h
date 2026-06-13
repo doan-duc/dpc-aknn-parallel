@@ -15,11 +15,11 @@
 
 /* ─── Tham số thuật toán mặc định ──────────────────────────────────────── */
 // Đường dẫn mặc định của file dữ liệu và nhãn (có thể sửa ở đây để chạy không cần đối số dòng lệnh)
-#define DEFAULT_INPUT_FILE  "../data/real/fashion-mnist/fashion_mnist_X.csv"
-#define DEFAULT_LABEL_FILE  "../data/real/fashion-mnist/fashion_mnist_y.csv"
+#define DEFAULT_INPUT_FILE  "../data/real/iris/iris_X_norm.csv"
+#define DEFAULT_LABEL_FILE  "../data/real/iris/iris_y.csv"
 
-#define DEFAULT_N_CLUSTERS  10
-#define DEFAULT_K           15
+#define DEFAULT_N_CLUSTERS  3
+#define DEFAULT_K           7
 
 /* ─── Cấu hình OpenMP ──────────────────────────────────────────────────── */
 /*  0 = dùng tất cả lõi khả dụng (omp_get_max_threads)                     */
