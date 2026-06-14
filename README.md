@@ -13,6 +13,9 @@
 [![Python](https://img.shields.io/badge/Scripting-Python_3-yellow.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](https://opensource.org/licenses/MIT)
 
+## ℹ️ About the Project
+This repository contains the Course Assignment (Bài tập lớn - BTL) for the **Parallel Programming** (Lập trình song song - LTSS) course. The primary objective is to parallelize and optimize the DPC-AKNN (Density Peak Clustering based on Nearest Neighbors) algorithm using OpenMP for multicore CPUs and CUDA C for NVIDIA GPUs to achieve maximum execution efficiency and scalability on large-scale datasets.
+
 This project focuses on the implementation, parallelization, and optimization of the **Density Peak Clustering based on Nearest Neighbors (DPC-AKNN)** algorithm on both multicore CPUs (using **OpenMP**) and GPUs (using **NVIDIA CUDA C**). The implementation is based on the following publication:
 
 > 📄 **Houshen Lin, Jian Hou, Huaqiang Yuan.** *"Density peak clustering based on nearest neighbors"*. Engineering Applications of Artificial Intelligence 160 (2025) 111981.
@@ -284,6 +287,9 @@ For a deeper mathematical dive, formulas, and code mappings, check the theoretic
 [![OpenMP](https://img.shields.io/badge/Parallel-OpenMP-orange.svg)](https://www.openmp.org/)
 [![Python](https://img.shields.io/badge/Scripting-Python_3-yellow.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](https://opensource.org/licenses/MIT)
+
+## ℹ️ Giới thiệu dự án
+Kho lưu trữ này chứa Bài tập lớn (BTL) môn học **Lập trình song song** (LTSS). Mục tiêu chính của dự án là song song hóa và tối ưu hóa thuật toán DPC-AKNN (Density Peak Clustering based on Nearest Neighbors) bằng cách sử dụng OpenMP cho CPU đa nhân và CUDA C cho GPU NVIDIA nhằm đạt hiệu năng thực thi và khả năng mở rộng tối đa trên các bộ dữ liệu lớn.
 
 Dự án tập trung triển khai, song song hóa và tối ưu hóa thuật toán **Density Peak Clustering based on Nearest Neighbors (DPC-AKNN)** trên CPU đa nhân (sử dụng **OpenMP**) và GPU (sử dụng **NVIDIA CUDA C**). Thiết kế được xây dựng dựa trên bài báo khoa học:
 
