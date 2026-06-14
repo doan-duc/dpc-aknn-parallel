@@ -1,3 +1,8 @@
+# 🚀 DPC-AKNN Parallelization & Optimization / Song song hóa & Tối ưu hóa DPC-AKNN
+
+<details open>
+<summary><b>🇺🇸 Read in English (Default / Click to collapse)</b></summary>
+
 # 🚀 Parallelization and Optimization of the DPC-AKNN Clustering Algorithm (OpenMP & CUDA)
 
 [![C99](https://img.shields.io/badge/Language-C99-blue.svg)](https://en.wikipedia.org/wiki/C99)
@@ -161,7 +166,7 @@ Parameters can be adjusted in `config.h` of the respective implementations:
   * `DEFAULT_N_CLUSTERS`: Number of target clusters.
   * `DEFAULT_K`: Nearest neighbors parameter.
   * `OMP_N_THREADS`: OpenMP threads (`0` uses all available cores).
-* **GPU Config ([gpu_parallel/src/config.h](file:///d:/dpc-aknn-parallel/gpu_parallel/src/config.h)):**
+* **GPU Config ([gpu_parallel/src/config.h](file:///d:/BTL_LTSS/gpu_parallel/src/config.h)):**
   * `GPU_DEVICE_ID`: Select target GPU (default: `0`).
   * `GPU_BATCH_SIZE`: Chunk size to partition matrix operations and fit into VRAM (default: `1000`).
   * `BLOCK_SIZE_1D` & `BLOCK_SIZE_2D_X/Y`: Thread block layout variables.
@@ -219,10 +224,19 @@ Below are the detailed execution times (in seconds) for each thread count config
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **1** | 3780.9796 | 2561.668 | 0.002 | 0.006 | 1219.158 | 0.017 | 0.032 | 0.069 | 0.028 | 0.000 | 1.00x |
 | **2** | 1918.7933 | 1298.332 | 0.001 | 0.003 | 620.318 | 0.018 | 0.032 | 0.067 | 0.022 | 0.000 | 1.97x |
+| **3** | 1328.3810 | 900.621 | 0.001 | 0.002 | 427.618 | 0.018 | 0.033 | 0.067 | 0.021 | 0.000 | 2.85x |
 | **4** | 1036.3911 | 701.406 | 0.001 | 0.002 | 334.846 | 0.018 | 0.032 | 0.066 | 0.021 | 0.000 | 3.65x |
+| **5** | 866.1966 | 578.007 | 0.001 | 0.001 | 288.043 | 0.018 | 0.032 | 0.075 | 0.020 | 0.000 | 4.36x |
 | **6** | 748.9263 | 492.012 | 0.000 | 0.001 | 256.767 | 0.018 | 0.033 | 0.076 | 0.019 | 0.000 | 5.05x |
+| **7** | 660.6184 | 427.161 | 0.000 | 0.001 | 233.316 | 0.018 | 0.033 | 0.070 | 0.019 | 0.000 | 5.72x |
 | **8** | 594.8885 | 378.021 | 0.000 | 0.001 | 216.732 | 0.018 | 0.033 | 0.064 | 0.019 | 0.000 | 6.36x |
+| **9** | 599.1490 | 374.506 | 0.000 | 0.001 | 224.506 | 0.018 | 0.033 | 0.065 | 0.019 | 0.000 | 6.31x |
+| **10**| 551.8462 | 344.697 | 0.000 | 0.001 | 207.008 | 0.020 | 0.033 | 0.068 | 0.019 | 0.000 | 6.85x |
+| **11**| 507.1294 | 313.523 | 0.000 | 0.001 | 193.462 | 0.020 | 0.033 | 0.071 | 0.018 | 0.000 | 7.46x |
 | **12**| 478.7060 | 293.630 | 0.000 | 0.001 | 184.936 | 0.019 | 0.033 | 0.067 | 0.018 | 0.000 | 7.90x |
+| **13**| 452.9379 | 276.527 | 0.000 | 0.001 | 176.270 | 0.020 | 0.033 | 0.069 | 0.018 | 0.000 | 8.35x |
+| **14**| 425.4405 | 255.592 | 0.000 | 0.001 | 169.709 | 0.020 | 0.032 | 0.067 | 0.018 | 0.000 | 8.89x |
+| **15**| 401.5139 | 238.926 | 0.000 | 0.001 | 162.444 | 0.020 | 0.033 | 0.072 | 0.018 | 0.000 | 9.42x |
 | **16**| **385.6999** | 228.118 | 0.000 | 0.001 | 157.440 | 0.020 | 0.033 | 0.070 | 0.018 | 0.000 | **9.80x** |
 
 #### 🔹 Performance Charts
@@ -235,7 +249,7 @@ To visualize scaling behavior, the charts below illustrate Execution Time and Sp
 #### 🔹 Scalability Discussion
 * **Amdahl's Law:** The profiling charts verify that **Step 1** (kNN search) and **Step 3b** (delta calculation) occupy **99.9%** of the sequential execution time ($P \approx 0.999$). By parallelizing both domains, the theoretical scaling limit remains high.
 * **AMD EPYC 9754 Scaling:** Scalability is almost linear up to 16 threads. Past 32 threads, memory bandwidth bottlenecks begin to restrict speedup scaling. Even so, the 256-thread execution achieves an exceptional speedup of **108.97x** compared to single-thread execution.
-* **Intel i7-10700K Scaling:** Scaling behaves cleanly up to 8 threads (its physical cores). Between 9 to 16 threads (Hyper-Threading/logical processors), speedup improvements continue but slow down, finishing at **9.80x**.
+* **Intel i7-10700K Scaling:** Scaling behaves cleanly up to 8 threads (its physical cores). Between 9 to 16 threads (Logical processors/Hyper-Threading), speedup improvements continue but slow down, finishing at **9.80x**.
 
 ---
 
@@ -266,12 +280,18 @@ This extreme acceleration is achieved by mapping **Step 1** ($k$NN) and **Step 3
 For a deeper mathematical dive, formulas, and code mappings, check the theoretical documentation:
 👉 [theory/THEORY.md](file:///d:/BTL_LTSS/theory/THEORY.md)
 
----
+</details>
 
 <details>
-<summary><b>🇻🇳 Xem bản Tiếng Việt / View Vietnamese Version</b></summary>
+<summary><b>🇻🇳 Xem bản Tiếng Việt / View Vietnamese Version (Click to expand)</b></summary>
 
 # 🚀 Song song hóa và Tối ưu hóa Thuật toán Phân cụm DPC-AKNN (OpenMP & CUDA)
+
+[![C99](https://img.shields.io/badge/Language-C99-blue.svg)](https://en.wikipedia.org/wiki/C99)
+[![CUDA](https://img.shields.io/badge/Parallel-CUDA_C-green.svg)](https://developer.nvidia.com/cuda-zone)
+[![OpenMP](https://img.shields.io/badge/Parallel-OpenMP-orange.svg)](https://www.openmp.org/)
+[![Python](https://img.shields.io/badge/Scripting-Python_3-yellow.svg)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](https://opensource.org/licenses/MIT)
 
 Dự án tập trung triển khai, song song hóa và tối ưu hóa thuật toán **Density Peak Clustering based on Nearest Neighbors (DPC-AKNN)** trên CPU đa nhân (sử dụng **OpenMP**) và GPU (sử dụng **NVIDIA CUDA C**). Thiết kế được xây dựng dựa trên bài báo khoa học:
 
@@ -450,7 +470,7 @@ Phần này phân tích hiệu năng thực thi song song thuật toán trên t�
 ### 2. Phân Tích Độ Phức Tạp & Chiến Lược Song Song Hóa Từng Bước
 Dưới đây là bảng phân tích chi tiết cho 8 bước của thuật toán DPC-AKNN:
 
-| Bước | Tên Giai Đoạn | Độ Phức Tạp Tuần Tự | Cơ Chế Song Song Hóa | Tỷ Trọng Thời Gian Chạy | Ghi Chú / Chi Tiết Tối Ưu Hóa |
+| Bước | Tên Giai Đoạn | Độ Phức Tạp Tuần Tự | Cơ Chi Song Song Hóa | Tỷ Trọng Thời Gian Chạy | Ghi Chú / Chi Tiết Tối Ưu Hóa |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Bước 1** | Tìm kiếm láng giềng $k$NN | $O(N^2 \cdot D)$ | **[DOMAIN]** OpenMP / CUDA | **Rất cao (~60-70% trên CPU)**| Tính khoảng cách pairwise. GPU tăng tốc bằng `cuBLAS` SGEMM. CPU song song hóa vòng lặp lớn kết hợp kỹ thuật cắt sớm khoảng cách. |
 | **Bước 2** | Tính d_c thích ứng | $O(N)$ | **[DOMAIN + SERIAL]** Reduction | **Rất nhỏ (<0.01%)** | Thực hiện trên Host CPU do chỉ tính trung bình cộng đơn giản. |
@@ -486,10 +506,19 @@ Bảng tổng hợp thời gian thực thi (giây) chi tiết theo luồng chạ
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **1** | 3780.9796 | 2561.668 | 0.002 | 0.006 | 1219.158 | 0.017 | 0.032 | 0.069 | 0.028 | 0.000 | 1.00x |
 | **2** | 1918.7933 | 1298.332 | 0.001 | 0.003 | 620.318 | 0.018 | 0.032 | 0.067 | 0.022 | 0.000 | 1.97x |
+| **3** | 1328.3810 | 900.621 | 0.001 | 0.002 | 427.618 | 0.018 | 0.033 | 0.067 | 0.021 | 0.000 | 2.85x |
 | **4** | 1036.3911 | 701.406 | 0.001 | 0.002 | 334.846 | 0.018 | 0.032 | 0.066 | 0.021 | 0.000 | 3.65x |
+| **5** | 866.1966 | 578.007 | 0.001 | 0.001 | 288.043 | 0.018 | 0.032 | 0.075 | 0.020 | 0.000 | 4.36x |
 | **6** | 748.9263 | 492.012 | 0.000 | 0.001 | 256.767 | 0.018 | 0.033 | 0.076 | 0.019 | 0.000 | 5.05x |
+| **7** | 660.6184 | 427.161 | 0.000 | 0.001 | 233.316 | 0.018 | 0.033 | 0.070 | 0.019 | 0.000 | 5.72x |
 | **8** | 594.8885 | 378.021 | 0.000 | 0.001 | 216.732 | 0.018 | 0.033 | 0.064 | 0.019 | 0.000 | 6.36x |
+| **9** | 599.1490 | 374.506 | 0.000 | 0.001 | 224.506 | 0.018 | 0.033 | 0.065 | 0.019 | 0.000 | 6.31x |
+| **10**| 551.8462 | 344.697 | 0.000 | 0.001 | 207.008 | 0.020 | 0.033 | 0.068 | 0.019 | 0.000 | 6.85x |
+| **11**| 507.1294 | 313.523 | 0.000 | 0.001 | 193.462 | 0.020 | 0.033 | 0.071 | 0.018 | 0.000 | 7.46x |
 | **12**| 478.7060 | 293.630 | 0.000 | 0.001 | 184.936 | 0.019 | 0.033 | 0.067 | 0.018 | 0.000 | 7.90x |
+| **13**| 452.9379 | 276.527 | 0.000 | 0.001 | 176.270 | 0.020 | 0.033 | 0.069 | 0.018 | 0.000 | 8.35x |
+| **14**| 425.4405 | 255.592 | 0.000 | 0.001 | 169.709 | 0.020 | 0.032 | 0.067 | 0.018 | 0.000 | 8.89x |
+| **15**| 401.5139 | 238.926 | 0.000 | 0.001 | 162.444 | 0.020 | 0.033 | 0.072 | 0.018 | 0.000 | 9.42x |
 | **16**| **385.6999** | 228.118 | 0.000 | 0.001 | 157.440 | 0.020 | 0.033 | 0.070 | 0.018 | 0.000 | **9.80x** |
 
 #### 🔹 Biểu đồ phân tích hiệu năng
@@ -502,7 +531,7 @@ Các biểu đồ dưới đây mô tả sự thay đổi của Thời gian ch�
 #### 🔹 Thảo luận về khả năng mở rộng
 * **Định luật Amdahl:** Thực nghiệm chứng minh **Bước 1** (kNN) và **Bước 3b** (delta) chiếm **99.9%** thời gian chạy tuần tự ($P \approx 0.999$). Việc song song hóa triệt để 2 phân vùng này giúp bảo toàn hiệu năng tăng tốc ở số luồng cực lớn.
 * **AMD EPYC 9754:** Tăng tốc gần như tuyến tính tuyệt hảo lên tới 16 luồng. Từ 32 luồng trở đi, nghẽn băng thông bộ nhớ RAM bắt đầu làm suy giảm độ dốc tăng tốc. Tuy nhiên, ở luồng cực đại (256 threads), hệ thống đạt độ tăng tốc cực kỳ ấn tượng là **108.97x**.
-* **Intel i7-10700K:** Khả năng tăng tốc tuyến tính khá tốt tới 8 luồng (số lõi vật lý). Từ 9 đến 16 luồng (Hyper-Threading), hiệu năng tăng chậm lại nhưng vẫn đạt đỉnh ở **9.80x**.
+* **Intel i7-10700K:** Khả năng tăng tốc tuyến tính khá tốt tới 8 luồng (số lõi vật lý). Từ 9 đến 16 luồng (Logical processors/Hyper-Threading), hiệu năng tăng chậm lại nhưng vẫn đạt đỉnh ở **9.80x**.
 
 ---
 
