@@ -40,7 +40,8 @@ d:/BTL_LTSS/
 │   │   ├── dpc_aknn_core.c           # Core DPC-AKNN step-by-step algorithms
 │   │   └── ...
 │   ├── utility_functions/            # CPU helper tools
-│   │   └── visualize.py              # Visualizes clustering results against ground truth
+│   │   ├── visualize.py              # Visualizes clustering results against ground truth
+│   │   └── plot_runtime.py           # Generates CPU runtime and speedup benchmark plots
 │   ├── Makefile                      # Makefile for CPU build
 │   ├── readme_win.md                 # Compilation guide for Windows
 │   └── readme_linux.md               # Compilation guide for Linux
@@ -66,11 +67,6 @@ d:/BTL_LTSS/
 │
 ├── theory/
 │   └── THEORY.md                     # Mathematical details and formula mapping
-│
-├── visual/                           # Python data visualization utilities
-│   ├── outputs/                      # Saved charts and images
-│   ├── visualize_data.py             # Basic dataset visualization (PCA, t-SNE)
-│   └── plot_runtime.py               # Generates CPU runtime and speedup benchmark plots
 │
 └── README.md                         # This bilingual documentation
 ```
@@ -244,9 +240,9 @@ Below are the detailed execution times (in seconds) for each thread count config
 #### 🔹 Performance Charts
 To visualize scaling behavior, the charts below illustrate Execution Time and Speedup Factors for each CPU configuration:
 
-![AMD EPYC 9754 Scaling Benchmark](visual/outputs/epyc_9754_benchmark.png)
+![AMD EPYC 9754 Scaling Benchmark](cpu_parallel/utility_functions/epyc_9754_benchmark.png)
 
-![Intel i7-10700K Scaling Benchmark](visual/outputs/i7_10700k_benchmark.png)
+![Intel i7-10700K Scaling Benchmark](cpu_parallel/utility_functions/i7_10700k_benchmark.png)
 
 #### 🔹 Scalability Discussion
 * **Amdahl's Law:** The profiling charts verify that **Step 1** (kNN search) and **Step 3b** (delta calculation) occupy **99.9%** of the sequential execution time ($P \approx 0.999$). By parallelizing both domains, the theoretical scaling limit remains high.
@@ -319,7 +315,8 @@ d:/BTL_LTSS/
 │   │   ├── dpc_aknn_core.c           # Mã nguồn các bước lõi của DPC-AKNN
 │   │   └── ...
 │   ├── utility_functions/            # Công cụ hỗ trợ CPU
-│   │   └── visualize.py              # Script so sánh nhãn dự đoán vs nhãn gốc
+│   │   ├── visualize.py              # Script so sánh nhãn dự đoán vs nhãn gốc
+│   │   └── plot_runtime.py           # Script vẽ biểu đồ so sánh thời gian và speedup
 │   ├── Makefile                      # Makefile cho CPU
 │   ├── readme_win.md                 # Hướng dẫn Windows
 │   └── readme_linux.md               # Hướng dẫn Linux
@@ -347,9 +344,7 @@ d:/BTL_LTSS/
 │   └── THEORY.md                     # Tài liệu lý thuyết toán học & công thức
 │
 ├── visual/                           # Tiện ích trực quan hóa Python
-│   ├── outputs/                      # Thư mục lưu biểu đồ
-│   ├── visualize_data.py             # Trực quan dữ liệu đầu vào (PCA, t-SNE)
-│   └── plot_runtime.py               # Script vẽ biểu đồ so sánh thời gian và speedup
+│   └── visualize_data.py             # Trực quan dữ liệu đầu vào (PCA, t-SNE)
 │
 └── README.md                         # tệp này
 ```
@@ -523,9 +518,9 @@ Bảng tổng hợp thời gian thực thi (giây) chi tiết theo luồng chạ
 #### 🔹 Biểu đồ phân tích hiệu năng
 Các biểu đồ dưới đây mô tả sự thay đổi của Thời gian chạy (Execution Time) và Hệ số tăng tốc (Speedup Factor) đối với từng CPU:
 
-![AMD EPYC 9754 Scaling Benchmark](visual/outputs/epyc_9754_benchmark.png)
+![AMD EPYC 9754 Scaling Benchmark](cpu_parallel/utility_functions/epyc_9754_benchmark.png)
 
-![Intel i7-10700K Scaling Benchmark](visual/outputs/i7_10700k_benchmark.png)
+![Intel i7-10700K Scaling Benchmark](cpu_parallel/utility_functions/i7_10700k_benchmark.png)
 
 #### 🔹 Thảo luận về khả năng mở rộng
 * **Định luật Amdahl:** Thực nghiệm chứng minh **Bước 1** (kNN) và **Bước 3b** (delta) chiếm **99.9%** thời gian chạy tuần tự ($P \approx 0.999$). Việc song song hóa triệt để 2 phân vùng này giúp bảo toàn hiệu năng tăng tốc ở số luồng cực lớn.

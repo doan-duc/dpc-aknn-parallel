@@ -24,9 +24,8 @@ i7_runtimes = np.array([3780.9796, 1918.7933, 1328.3810, 1036.3911, 866.1966, 74
                         599.1490, 551.8462, 507.1294, 478.7060, 452.9379, 425.4405, 401.5139, 385.6999])
 i7_speedups = i7_runtimes[0] / i7_runtimes
 
-# Create output folder
-output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs")
-os.makedirs(output_dir, exist_ok=True)
+# Output directory is the same directory as the script
+output_dir = os.path.dirname(os.path.abspath(__file__))
 
 # ----------------- PLOT 1: AMD EPYC 9754 Benchmark -----------------
 fig_epyc, (ax_time, ax_speedup) = plt.subplots(1, 2, figsize=(14, 6))
@@ -35,7 +34,6 @@ fig_epyc, (ax_time, ax_speedup) = plt.subplots(1, 2, figsize=(14, 6))
 ax_time.plot(epyc_threads, epyc_runtimes, marker='o', markersize=8, color='#0F4C81', linewidth=2.5, label='Actual Runtime')
 for x, y in zip(epyc_threads, epyc_runtimes):
     label = f"{y:.1f}s"
-    # Position adjustments for clarity
     xytext = (0, 8) if x != 256 else (15, -10)
     ax_time.annotate(label, (x, y), textcoords="offset points", xytext=xytext, ha='center', fontsize=9, color='#333333')
 
@@ -75,7 +73,7 @@ fig_i7, (ax_time, ax_speedup) = plt.subplots(1, 2, figsize=(14, 6))
 # Left Subplot: Execution Time
 ax_time.plot(i7_threads, i7_runtimes, marker='o', markersize=7, color='#1F77B4', linewidth=2.5, label='Actual Runtime')
 for x, y in zip(i7_threads, i7_runtimes):
-    if x in [1, 2, 4, 8, 12, 16]:  # Annotate selected points to avoid crowding
+    if x in [1, 2, 4, 8, 12, 16]:  # Annotate selected points
         label = f"{y:.1f}s"
         ax_time.annotate(label, (x, y), textcoords="offset points", xytext=(0, 8), ha='center', fontsize=9, color='#333333')
 
