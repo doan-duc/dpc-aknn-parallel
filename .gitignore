@@ -9,6 +9,7 @@ outputs/
 data/
 .vscode/
 visual/
+utility_functions/
 
 # Logs
 *.log

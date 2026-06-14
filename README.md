@@ -39,9 +39,10 @@ d:/BTL_LTSS/
 │   │   ├── main.c                    # Application entry point
 │   │   ├── dpc_aknn_core.c           # Core DPC-AKNN step-by-step algorithms
 │   │   └── ...
-│   ├── utility_functions/            # CPU helper tools
-│   │   ├── visualize.py              # Visualizes clustering results against ground truth
-│   │   └── plot_runtime.py           # Generates CPU runtime and speedup benchmark plots
+│   ├── benchmark/                    # Benchmark scripts and plots
+│   │   ├── plot_runtime.py           # Generates CPU runtime and speedup benchmark plots
+│   │   ├── epyc_9754_benchmark.png   # Performance plot for AMD EPYC 9754
+│   │   └── i7_10700k_benchmark.png   # Performance plot for Intel i7-10700K
 │   ├── Makefile                      # Makefile for CPU build
 │   ├── readme_win.md                 # Compilation guide for Windows
 │   └── readme_linux.md               # Compilation guide for Linux
@@ -52,10 +53,6 @@ d:/BTL_LTSS/
 │   │   ├── main.cu                   # Application entry point
 │   │   ├── kernels.cu                # CUDA kernels for distance, kNN, and voting
 │   │   └── ...
-│   ├── utility_functions/            # GPU helper tools
-│   │   ├── demo.py                   # Live-plotting Python demo for step-by-step execution
-│   │   ├── metrics.py                # Computes ARI, NMI, ACC (Hungarian Algorithm)
-│   │   └── visualize.py              # Plots cluster classifications
 │   ├── Makefile                      # Makefile for GPU build
 │   ├── readme_win.md                 # Compilation guide for Windows
 │   └── readme_linux.md               # Compilation guide for Linux
@@ -240,9 +237,9 @@ Below are the detailed execution times (in seconds) for each thread count config
 #### 🔹 Performance Charts
 To visualize scaling behavior, the charts below illustrate Execution Time and Speedup Factors for each CPU configuration:
 
-![AMD EPYC 9754 Scaling Benchmark](cpu_parallel/utility_functions/epyc_9754_benchmark.png)
+![AMD EPYC 9754 Scaling Benchmark](cpu_parallel/benchmark/epyc_9754_benchmark.png)
 
-![Intel i7-10700K Scaling Benchmark](cpu_parallel/utility_functions/i7_10700k_benchmark.png)
+![Intel i7-10700K Scaling Benchmark](cpu_parallel/benchmark/i7_10700k_benchmark.png)
 
 #### 🔹 Scalability Discussion
 * **Amdahl's Law:** The profiling charts verify that **Step 1** (kNN search) and **Step 3b** (delta calculation) occupy **99.9%** of the sequential execution time ($P \approx 0.999$). By parallelizing both domains, the theoretical scaling limit remains high.
@@ -314,9 +311,10 @@ d:/BTL_LTSS/
 │   │   ├── main.c                    # Điểm chạy chương trình chính
 │   │   ├── dpc_aknn_core.c           # Mã nguồn các bước lõi của DPC-AKNN
 │   │   └── ...
-│   ├── utility_functions/            # Công cụ hỗ trợ CPU
-│   │   ├── visualize.py              # Script so sánh nhãn dự đoán vs nhãn gốc
-│   │   └── plot_runtime.py           # Script vẽ biểu đồ so sánh thời gian và speedup
+│   ├── benchmark/                    # Mã nguồn vẽ biểu đồ và lưu kết quả đo
+│   │   ├── plot_runtime.py           # Script vẽ biểu đồ thời gian và speedup
+│   │   ├── epyc_9754_benchmark.png   # Biểu đồ hiệu năng AMD EPYC 9754
+│   │   └── i7_10700k_benchmark.png   # Biểu đồ hiệu năng Intel i7-10700K
 │   ├── Makefile                      # Makefile cho CPU
 │   ├── readme_win.md                 # Hướng dẫn Windows
 │   └── readme_linux.md               # Hướng dẫn Linux
@@ -327,10 +325,6 @@ d:/BTL_LTSS/
 │   │   ├── main.cu                   # Điểm chạy chương trình chính
 │   │   ├── kernels.cu                # Các CUDA Kernel xử lý khoảng cách, kNN, bầu chọn
 │   │   └── ...
-│   ├── utility_functions/            # Công cụ hỗ trợ GPU
-│   │   ├── demo.py                   # Script DEMO đồ họa động từng bước thuật toán
-│   │   ├── metrics.py                # Tính ARI, NMI, ACC (Thuật toán Hungarian)
-│   │   └── visualize.py              # Vẽ phân bố cụm
 │   ├── Makefile                      # Makefile cho GPU
 │   ├── readme_win.md                 # Hướng dẫn Windows
 │   └── readme_linux.md               # Hướng dẫn Linux
@@ -518,9 +512,9 @@ Bảng tổng hợp thời gian thực thi (giây) chi tiết theo luồng chạ
 #### 🔹 Biểu đồ phân tích hiệu năng
 Các biểu đồ dưới đây mô tả sự thay đổi của Thời gian chạy (Execution Time) và Hệ số tăng tốc (Speedup Factor) đối với từng CPU:
 
-![AMD EPYC 9754 Scaling Benchmark](cpu_parallel/utility_functions/epyc_9754_benchmark.png)
+![AMD EPYC 9754 Scaling Benchmark](cpu_parallel/benchmark/epyc_9754_benchmark.png)
 
-![Intel i7-10700K Scaling Benchmark](cpu_parallel/utility_functions/i7_10700k_benchmark.png)
+![Intel i7-10700K Scaling Benchmark](cpu_parallel/benchmark/i7_10700k_benchmark.png)
 
 #### 🔹 Thảo luận về khả năng mở rộng
 * **Định luật Amdahl:** Thực nghiệm chứng minh **Bước 1** (kNN) và **Bước 3b** (delta) chiếm **99.9%** thời gian chạy tuần tự ($P \approx 0.999$). Việc song song hóa triệt để 2 phân vùng này giúp bảo toàn hiệu năng tăng tốc ở số luồng cực lớn.
