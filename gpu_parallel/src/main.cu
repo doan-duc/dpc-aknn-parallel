@@ -1,10 +1,4 @@
-/*
- * main.cu - Entry point cho gpu_parallel.
- *
- * Muc dich: Phan cum file CSV do nguoi dung cung cap.
- * Bài báo: Thực nghiệm DPC-AKNN.
- * Song song hóa: Đo thời gian bằng CUDA Events.
- */
+/* Command-line entry point for clustering a CSV matrix with CUDA DPC-AKNN. */
 #include "dpc_aknn.h"
 #include "utils_gpu.h"
 

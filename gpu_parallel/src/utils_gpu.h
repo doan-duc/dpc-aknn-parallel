@@ -1,10 +1,4 @@
-/*
- * utils_gpu.h - Tiện ích CUDA và dữ liệu demo.
- *
- * Muc dich: Bao loi CUDA va I/O don gian.
- * Bài báo: Hỗ trợ thực nghiệm.
- * Song song hóa: Gọi CUDA runtime khi cần.
- */
+/* CUDA error handling, CSV I/O, timing, metrics, and logging utilities. */
 #ifndef UTILS_GPU_H
 #define UTILS_GPU_H
 

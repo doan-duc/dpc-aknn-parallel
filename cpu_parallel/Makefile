@@ -1,10 +1,10 @@
 ifeq ($(OS),Windows_NT)
-    # Cấu hình dành cho Windows
+    # Windows configuration.
     EXE = .exe
     RM = del /Q /F
     CLEAN_CMD = $(RM) $(TARGET)$(EXE) output\labels\*.csv output\benchmarks\*.csv 2>NUL || exit 0
 else
-    # Cấu hình dành cho Linux
+    # Linux configuration.
     EXE =
     RM = rm -f
     CLEAN_CMD = $(RM) $(TARGET) *.exe output/labels/*.csv output/benchmarks/*.csv

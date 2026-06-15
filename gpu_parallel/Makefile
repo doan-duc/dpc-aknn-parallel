@@ -1,12 +1,12 @@
 ifeq ($(OS),Windows_NT)
-    # Cấu hình dành cho Windows
+    # Windows configuration.
     EXE = .exe
     RM = del /Q /F
     NVCC = nvcc
-    # Lệnh clean trên Windows dùng dấu xoẹt ngược \ và lệnh del
+    # Windows cleanup uses backslash paths and the del command.
     CLEAN_CMD = $(RM) $(TARGET)$(EXE) output\labels\*.csv 2>NUL || exit 0
 else
-    # Cấu hình dành cho Linux
+    # Linux configuration.
     EXE =
     RM = rm -f
     CUDA_HOME ?= /usr/local/cuda
@@ -36,4 +36,3 @@ $(TARGET)$(EXE): $(SRCS)
 
 clean:
 	$(CLEAN_CMD)
-

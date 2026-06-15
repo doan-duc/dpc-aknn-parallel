@@ -1,25 +1,9 @@
 /*
- * kernels.cu - CUDA kernels cho DPC-AKNN (OPTIMIZED).
+ * CUDA kernels for DPC-AKNN.
  *
- * ═══════════════════════════════════════════════════════════════════════════
- * TỐI ƯU SO VỚI BẢN GỐC:
- *
- * 🔴 [OPT-1] compute_knn_kernel: Tiled shared memory
- *      Bản gốc: mỗi thread đọc X[j] trực tiếp từ global memory → bandwidth
- *      bound, mỗi điểm j bị đọc n lần → ~n² × d × 4B = 15.3 TB đọc.
- *      Fix: Load tile TILE_DIM điểm vào shared memory, tất cả thread trong
- *      block cùng dùng chung → giảm global reads ~TILE_DIM lần.
- *
- * 🔴 [OPT-2] compute_delta_kernel: Tiled shared memory + branch reduction
- *      Bản gốc: đọc X[j] và rho[j] lặp lại cho mọi thread → bandwidth bound.
- *      Fix: Tile X và rho vào shared memory, giảm đọc global ~TILE_DIM lần.
- *
- * 🟡 [OPT-3] Early exit trên dist² với ngưỡng từ heap/best_sq
- *      Giữ nguyên từ bản gốc nhưng áp dụng trên tiled data.
- *
- * 🟢 [OPT-4] Tất cả kernel so sánh bằng dist² thay dist, chỉ sqrt() 1 lần
- *      khi ghi kết quả cuối cùng.
- * ═══════════════════════════════════════════════════════════════════════════
+ * Distance kernels compare squared distances and apply square roots only to
+ * final outputs. The direct kernels remain available alongside the batched
+ * cuBLAS path used by the host orchestration layer.
  */
 #include "config.h"
 #include "kernels.cuh"
@@ -27,16 +11,7 @@
 #include <float.h>
 #include <math.h>
 
-/* ── Tile dimension cho shared memory ────────────────────────────────────── */
-/* Mỗi tile chứa TILE_DIM điểm. Shared memory cần: TILE_DIM * d * 4 bytes.
- * Với d=784, TILE_DIM=32: 32 * 784 * 4 = 98 KB > 48 KB limit.
- * Vì vậy ta dùng chiều: chia d thành các sub-tile D_TILE chiều.
- * Mỗi tile shared: TILE_DIM * D_TILE * 4 bytes.
- * TILE_DIM=128, D_TILE=128: 128*128*4 = 64 KB → quá lớn.
- * TILE_DIM=128, D_TILE=32:  128*32*4  = 16 KB → OK, còn chỗ cho heap.
- * → Ta tile theo CẢ điểm lẫn chiều.
- */
-#define KNN_TILE_N 64      /* Số điểm j mỗi tile */
+#define KNN_TILE_N 64
 
 static __device__ int better_min_pair(float cand_dist, int cand_idx, float best_dist, int best_idx) {
     return cand_dist < best_dist || (cand_dist == best_dist && cand_idx < best_idx);
@@ -61,16 +36,10 @@ static __device__ void sort_knn_small(float* dist_sq, int* idx, int k) {
     }
 }
 
-/* ── [OPT-1] Tiled kNN kernel ───────────────────────────────────────────── */
 /*
- * Ý tưởng: Thay vì mỗi thread đọc X[j] trực tiếp từ global memory,
- * ta chia các điểm j thành tile KNN_TILE_N điểm. Toàn block cùng tải
- * tile vào shared memory, sau đó mỗi thread tính khoảng cách tới
- * tất cả điểm trong tile. Vì d lớn (784), ta không thể tải cả d chiều
- * vào shared memory → ta tải từng chunk D chiều, cộng dồn dist².
- *
- * Lợi ích: Mỗi float của X[j][p] chỉ đọc 1 lần từ global memory
- * rồi được chia sẻ cho BLOCK_SIZE thread → giảm bandwidth ~BLOCK_SIZE lần.
+ * Direct kNN kernel. Each thread scans all candidate points and retains the
+ * best k squared distances in thread-local arrays. The current worst retained
+ * distance is an exact early-exit threshold.
  */
 __global__ void compute_knn_kernel(const float* X, int* knn_indices, float* knn_distances,
                                    int n, int d, int k) {
@@ -82,15 +51,12 @@ __global__ void compute_knn_kernel(const float* X, int* knn_indices, float* knn_
     int count = 0;
     int worst = 0;
 
-    /* Tải dòng X[i] vào registers/local memory 1 lần duy nhất */
-    /* Với d=784, đây sẽ nằm trong local memory (DRAM nhưng được cache ở L1/L2) */
-
     for (int j = 0; j < n; j++) {
         if (j == i) continue;
 
         float cutoff = count < k ? FLT_MAX : best_dist[worst];
 
-        /* Early-exit Euclidean distance² */
+        /* Stop once the partial squared distance exceeds the active cutoff. */
         float sum = 0.0f;
         int early_exit = 0;
         for (int p = 0; p < d; p++) {
@@ -131,19 +97,10 @@ __global__ void compute_knn_kernel(const float* X, int* knn_indices, float* knn_
     }
 }
 
-/* ── [OPT-2] Tiled delta kernel ─────────────────────────────────────────── */
 /*
- * compute_delta_kernel sử dụng shared memory tile để giảm đọc
- * global memory khi scan qua n điểm tìm min distance tới higher-rho.
- *
- * Shared memory layout:
- *   s_rho[TILE_DIM]    — rho của tile điểm j
- *   s_j_base           — index cơ sở của tile hiện tại
- *
- * Vì X quá lớn (784 float/điểm), ta không tile X vào shared memory.
- * Thay vào đó ta chỉ tile rho[] (nhỏ, 4B/điểm) để giảm random access.
- * Lợi ích chính: branch prediction tốt hơn — biết trước rho[j] nào
- * higher trước khi đọc X[j] (tốn 3KB).
+ * Delta kernel with shared-memory tiles for rho. Coordinate rows remain in
+ * global memory because their dimensionality is too large for a practical
+ * shared-memory tile.
  */
 
 #define DELTA_TILE 256
@@ -161,7 +118,7 @@ __global__ void compute_delta_kernel(const float* X, const float* rho, float* de
     float best_sq = is_top ? 0.0f : FLT_MAX;
 
     for (int tile_start = 0; tile_start < n; tile_start += DELTA_TILE) {
-        /* Collaborative load: tất cả thread trong block cùng tải rho */
+        /* Cooperatively load one rho tile into shared memory. */
         int load_idx = tile_start + threadIdx.x;
         if (threadIdx.x < DELTA_TILE && load_idx < n) {
             s_rho[threadIdx.x] = rho[load_idx];
@@ -177,7 +134,7 @@ __global__ void compute_delta_kernel(const float* X, const float* rho, float* de
             float rho_j = s_rho[j - tile_start];
 
             if (is_top) {
-                /* Top point: tìm max distance */
+                /* The highest-density point uses its maximum distance. */
                 float dsq = 0.0f;
                 for (int p = 0; p < d; p++) {
                     float diff = X[i * d + p] - X[j * d + p];
@@ -185,11 +142,11 @@ __global__ void compute_delta_kernel(const float* X, const float* rho, float* de
                 }
                 if (dsq > best_sq) best_sq = dsq;
             } else {
-                /* Normal point: tìm min distance tới higher-rho */
+                /* Other points use the nearest higher-density point. */
                 int higher = (rho_j > rho_i) || (rho_j == rho_i && j < i);
                 if (!higher) continue;
 
-                /* Early exit distance² */
+                /* Stop once this candidate exceeds the best squared distance. */
                 float dsq = 0.0f;
                 int skip = 0;
                 for (int p = 0; p < d; p++) {
@@ -209,8 +166,6 @@ __global__ void compute_delta_kernel(const float* X, const float* rho, float* de
         delta[i] = best_sq < FLT_MAX ? sqrtf(best_sq) : 0.0f;
     }
 }
-
-/* ── Các kernel còn lại (giữ nguyên, đã tối ưu đủ) ──────────────────────── */
 
 __global__ void compute_rho_kernel(const float* knn_distances, float* rho, float d_c, int n, int k) {
     /*
@@ -242,9 +197,9 @@ __global__ void build_initial_association_kernel(const int* knn_indices, const f
                                                  float* A, float* row_best_values, int* row_best_clusters,
                                                  int n, int k, int n_c) {
     /*
-     * Eq. (10): build A ban dau cho cac diem chua gan.
-     * A duoc index theo point_id thay vi row compaction de xoa hang O(1) bang active[i].
-     * row_best luu max_r A(i,r), de vong lap chi reduction theo hang thay vi n_c o moi diem.
+     * Equation (10): build A for active, unlabeled points. A is indexed by
+     * point ID, while active enables constant-time removal. row_best caches
+     * max_r A(i, r) for the global reduction.
      */
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
@@ -282,8 +237,8 @@ __global__ void find_best_association_kernel(const float* row_best_values,
                                              float* block_values, int* block_indices,
                                              int remaining, int n_c) {
     /*
-     * Reduction tren GPU de thay hang co row_best lon nhat.
-     * Ly thuyet van chon max A(i,r); row_best chi la cache cua max_r A(i,r).
+     * Reduce cached row maxima to find the largest A(i, r) across active
+     * points.
      */
     __shared__ float s_val[BLOCK_SIZE_1D];
     __shared__ int s_idx[BLOCK_SIZE_1D];
@@ -350,8 +305,8 @@ __global__ void update_association_column_kernel(const int* knn_indices, const f
                                                  int assigned_point, int assigned_cluster,
                                                  int k, int n_c) {
     /*
-     * Eq. (11): sau khi gan x_p vao cum r*, chi update cot r* cua nhung u co
-     * x_p nam trong kNN(u), lay tu reverse-kNN.
+     * Equation (11): after assigning x_p to cluster r, update column r only
+     * for points u whose kNN set contains x_p.
      */
     int begin = rknn_offset[assigned_point];
     int end = rknn_offset[assigned_point + 1];
@@ -383,8 +338,8 @@ __global__ void update_association_column_kernel(const int* knn_indices, const f
 __global__ void knn_voting_kernel(const int* knn_indices, const float* knn_distances, const int* labels,
                                   const int* order, int* new_labels, int n, int k, int n_c) {
     /*
-     * Section 3.2.3: xu ly theo order rho giam dan, nhung ghi double-buffer
-     * nen moi diem doc nhan cu va khong tao race.
+     * Section 3.2.3: process points in descending rho order. Double buffering
+     * keeps labels read-only and prevents cross-thread write races.
      */
     int pos = blockIdx.x * blockDim.x + threadIdx.x;
     if (pos >= n) return;
@@ -418,7 +373,8 @@ __global__ void knn_voting_kernel(const int* knn_indices, const float* knn_dista
 __global__ void allocate_remaining_kernel(const int* knn_indices, const float* knn_distances,
                                           int* labels, int n, int k, int n_c) {
     /*
-     * Eq. (12): gan moi diem con -1 vao cum co mean distance den kNN trong cum nho nhat.
+     * Equation (12): assign each remaining point to the cluster with the
+     * smallest mean distance among its labeled neighbors.
      */
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n || labels[i] >= 0) return;
@@ -446,20 +402,17 @@ __global__ void allocate_remaining_kernel(const int* knn_indices, const float* k
     labels[i] = best_c >= 0 ? best_c : 0;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * v3: cuBLAS GEMM-based kernels
+/*
+ * Kernels for distance batches produced by cuBLAS GEMM.
  *
- * ||x_i - x_j||² = ||x_i||² + ||x_j||² - 2·(x_i · x_j)
- *                   norms[i]   norms[j]    inner[i,j] (from cuBLAS SGEMM)
+ * squared_distance(i, j) = norm[i] + norm[j] - 2 * dot(x_i, x_j)
  *
- * cuBLAS computes inner with alpha=-2, so:
- *   D²[i,j] = norms[i] + norms[j] + inner[i,j]
+ * cuBLAS uses alpha = -2, so the kernel adds both row norms to inner.
  *
- * inner is stored as bs×n column-major (ldc=bs):
- *   inner[i_batch + j * batch_size] = -2 * dot(X[batch_start+i_batch], X[j])
- *
- * Access pattern: consecutive threads read consecutive addresses → coalesced.
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * inner is stored as an n-by-batch_size column-major matrix with leading
+ * dimension n. Consumers access element (j, i_batch) as
+ * inner[j + i_batch * n].
+ */
 
 __global__ void compute_norms_kernel(const float* X, float* norms, int n, int d) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -489,7 +442,7 @@ __global__ void topk_from_gemm_kernel(const float* inner, const float* norms,
     for (int j = 0; j < n; j++) {
         if (j == i_global) continue;
 
-        /* inner is n×bs col-major (ldc=n): element (j, i_batch) at j + i_batch*n */
+        /* Read element (j, i_batch) from the column-major GEMM output. */
         float dsq = norm_i + norms[j] + inner[j + i_batch * n];
         if (dsq < 0.0f) dsq = 0.0f;
 

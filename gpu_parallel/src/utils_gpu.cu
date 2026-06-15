@@ -1,10 +1,4 @@
-/*
- * utils_gpu.cu - Tien ich CUDA va CSV.
- *
- * Mục đích: Hỗ trợ bản GPU chạy độc lập.
- * Bài báo: Không áp dụng trực tiếp.
- * Song song hóa: Không song song, trừ CUDA runtime wrapper.
- */
+/* CUDA error handling, CSV I/O, timing, metrics, and logging utilities. */
 #include "utils_gpu.h"
 
 #include <ctype.h>
@@ -44,13 +38,7 @@ void log_printf(const char* format, ...) {
 }
 
 void gpu_check_error(cudaError_t err, const char* file, int line) {
-    /*
-     * gpu_check_error - Kiểm tra lỗi CUDA.
-     *
-     * Mục đích: Dừng sớm khi cudaMalloc, memcpy hoặc kernel launch lỗi.
-     * Bài báo: Không áp dụng trực tiếp.
-     * Song song hóa: Không song song.
-     */
+    /* Abort immediately when a CUDA runtime operation fails. */
     if (err != cudaSuccess) {
         const char* err_str = cudaGetErrorString(err);
         if (!err_str) err_str = "unknown CUDA error";
@@ -60,13 +48,7 @@ void gpu_check_error(cudaError_t err, const char* file, int line) {
 }
 
 void* gpu_malloc_check(size_t bytes, const char* var_name) {
-    /*
-     * gpu_malloc_check - Cấp phát GPU có kiểm tra lỗi.
-     *
-     * Mục đích: Báo lỗi rõ khi thiếu VRAM.
-     * Bài báo: Không áp dụng trực tiếp.
-     * Song song hóa: Không song song.
-     */
+    /* Allocate device memory and report the requested buffer on failure. */
     void* ptr = NULL;
     cudaError_t err = cudaMalloc(&ptr, bytes);
     if (err != cudaSuccess) {
@@ -140,17 +122,17 @@ int* csv_read_labels(const char* filepath, int n) {
     if (!fp) return NULL;
     char line[1024];
     
-    // Read the first line to check if it's a header
+    /* Read the first row to detect an optional header. */
     if (!fgets(line, sizeof(line), fp)) { fclose(fp); return NULL; }
     
     int* labels = (int*)malloc((size_t)n * sizeof(int));
     int start_idx = 0;
     
-    // Simple check: if the first line doesn't start with a digit (and is not negative), assume it's a header
+    /* A non-numeric first character indicates a header row. */
     if (!isdigit((unsigned char)line[0]) && line[0] != '-' && line[0] != ' ') {
-        // It's a header, skip it. Next fgets will read the first real label
+        /* Skip the header; the next read starts the label data. */
     } else {
-        // It's a number, so don't skip. Keep this as the first label.
+        /* Preserve a numeric first row as the first label. */
         labels[0] = atoi(line);
         start_idx = 1;
     }
@@ -285,7 +267,7 @@ double clustering_accuracy(const int* y_true, const int* y_pred, int n) {
         table[y_true[i] * cols + y_pred[i]]++;
     }
 
-    // Greedy matching for ACC (approximate Hungarian)
+    /* Approximate clustering accuracy with greedy label matching. */
     int* matched_pred = (int*)malloc((size_t)cols * sizeof(int));
     int* label_taken = (int*)calloc((size_t)rows, sizeof(int));
     for (int c = 0; c < cols; c++) matched_pred[c] = -1;

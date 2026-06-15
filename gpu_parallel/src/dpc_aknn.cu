@@ -1,10 +1,9 @@
 /*
- * dpc_aknn.cu - Host orchestration cho DPC-AKNN ban CUDA.
+ * Host orchestration for CUDA DPC-AKNN.
  *
- * Luong nay giu dung cac buoc trong THEORY.md, nhung tranh cac bottleneck cu:
- * - Khong tao/copy D[n x n] ve host de lay kNN.
- * - Delta tinh song song tren GPU theo Eq. (4).
- * - Association matrix A build mot lan, sau do update tang dan theo Eq. (11).
+ * kNN and delta distances are generated in batches with cuBLAS. The
+ * association matrix is initialized once and updated incrementally according
+ * to Equation (11).
  */
 #include "dpc_aknn.h"
 #include "kernels.cuh"
@@ -31,10 +30,7 @@ static int cmp_validx_desc(const void* a, const void* b) {
 }
 
 static void sort_indices_desc(const float* values, int* order, int n) {
-    /*
-     * O(n log n), thay selection sort O(n^2) trong ban cu.
-     * Dung cho gamma va rho-order cua buoc voting.
-     */
+    /* Build a descending index order for center selection and voting. */
     ValIdx* pairs = (ValIdx*)malloc((size_t)n * sizeof(ValIdx));
     for (int i = 0; i < n; i++) {
         pairs[i].value = values[i];
@@ -55,7 +51,7 @@ static int top_rho_index_host(const float* rho, int n) {
 
 float compute_dc_host(const float* knn_distances, int n, int k) {
     /*
-     * Eq. (6), (8), (9), (7): d_ci = mean(kNN_i) + std(kNN_i),
+     * Equations (6)-(9): d_ci = mean(kNN_i) + std(kNN_i), followed by
      * d_c = mean(d_ci) + sample_std(d_ci).
      */
     float* d_ci = (float*)malloc((size_t)n * sizeof(float));
@@ -95,9 +91,8 @@ static void select_centers_host(DPCAKNN_GPU* model) {
 
 static void build_initial_clusters_host(DPCAKNN_GPU* model, const float* X) {
     /*
-     * Section 3.2.1: BFS khoi tao cum giu serial de bao toan thu tu claim nhan.
-     * Bottleneck cu la tinh lai centroid bang cach scan toan bo n sau moi lan them diem.
-     * Ban nay giu running sum nen update centroid O(d).
+     * Section 3.2.1: serial expansion preserves label-claim order. A running
+     * coordinate sum updates each centroid in O(d) after accepting a point.
      */
     int n = model->n, d = model->d, k = model->k;
     int* queue = (int*)malloc((size_t)n * sizeof(int));
@@ -178,9 +173,7 @@ static int collect_active_unassigned(const int* labels, int* active, int* active
 
 static void build_reverse_knn_host(const int* knn_indices, int n, int k,
                                    int** offsets_out, int** data_out, int* total_out) {
-    /*
-     * rknn[j] = { i | j thuoc kNN(i) }, dung de update Eq. (11) chi tren cot r*.
-     */
+    /* Build rknn[j] = {i | j is in kNN(i)} for Equation (11) updates. */
     int* counts = (int*)calloc((size_t)n, sizeof(int));
     for (int i = 0; i < n; i++) {
         for (int t = 0; t < k; t++) counts[knn_indices[i * k + t]]++;
@@ -213,7 +206,7 @@ struct HeapNode {
 
 struct MaxHeap {
     HeapNode* data;
-    int* pos; // pos[point] = index in data array
+    int* pos; /* Heap position indexed by point ID. */
     int size;
 };
 
@@ -318,14 +311,14 @@ static void association_loop_cpu(DPCAKNN_GPU* model) {
     int* h_row_best_clusters = (int*)malloc((size_t)n * sizeof(int));
     for (int i = 0; i < n; i++) h_row_best_clusters[i] = -1;
 
-    // MaxHeap allocation
+    /* Allocate the association max-heap. */
     MaxHeap heap;
     heap.data = (HeapNode*)malloc((size_t)n * sizeof(HeapNode));
     heap.pos = (int*)malloc((size_t)n * sizeof(int));
     for (int i = 0; i < n; i++) heap.pos[i] = -1;
     heap.size = 0;
 
-    // Initialize A and row bests for unassigned points
+    /* Initialize association scores and row maxima for unassigned points. */
     for (int idx = 0; idx < remaining; idx++) {
         int i = h_active_points[idx];
         
@@ -405,8 +398,8 @@ static void association_loop_cpu(DPCAKNN_GPU* model) {
 
 static void voting_gpu(DPCAKNN_GPU* model) {
     /*
-     * Section 3.2.3: sap theo rho giam dan roi bo phieu kNN.
-     * Kernel ghi vao new_labels de tranh race va khong phu thuoc thu tu block.
+     * Section 3.2.3: vote in descending rho order. The kernel writes to a
+     * separate label buffer so results do not depend on block scheduling.
      */
     int n = model->n;
     int* h_order = (int*)malloc((size_t)n * sizeof(int));
@@ -472,7 +465,7 @@ void dpcaknn_gpu_fit(DPCAKNN_GPU* model, const float* h_X, int n, int d) {
     model->h_knn_indices = (int*)malloc((size_t)n * (size_t)model->k * sizeof(int));
     model->h_knn_distances = (float*)malloc((size_t)n * (size_t)model->k * sizeof(float));
 
-    // Initialize CUDA runtime and validate device index early.
+    /* Initialize CUDA and validate the configured device before allocation. */
     int device_count = 0;
     cudaError_t dev_err = cudaGetDeviceCount(&device_count);
     if (dev_err != cudaSuccess) {
@@ -507,25 +500,24 @@ void dpcaknn_gpu_fit(DPCAKNN_GPU* model, const float* h_X, int n, int d) {
 
     double start_step, end_step;
 
-    /* ── cuBLAS setup ──────────────────────────────────────────────────── */
+    /* Initialize cuBLAS. */
     cublasHandle_t cublas_handle;
     cublasCreate(&cublas_handle);
 
-    /* Precompute norms: norms[i] = ||X[i]||² */
+    /* Precompute squared row norms. */
     float* d_norms = (float*)gpu_malloc_check((size_t)n * sizeof(float), "d_norms");
     compute_norms_kernel<<<grid, block>>>(model->d_X, d_norms, n, d);
     CUDA_CHECK(cudaGetLastError());
 
-    /* Batch size for GEMM: inner buffer = bs × n × 4 bytes (Exactly respected from config.h) */
+    /* Allocate the configured n-by-batch GEMM output buffer. */
     int gemm_bs = GPU_BATCH_SIZE;  
     float* d_inner = (float*)gpu_malloc_check((size_t)gemm_bs * (size_t)n * sizeof(float), "d_inner");
     log_printf("[DPC-AKNN] cuBLAS GEMM batch size: %d (inner buffer: %.1f MB)\n",
                gemm_bs, (double)gemm_bs * n * sizeof(float) / (1024.0 * 1024.0));
 
     /*
-     * Buoc 1: kNN via cuBLAS GEMM.
-     * ||x_i - x_j||² = norms[i] + norms[j] - 2·dot(x_i, x_j)
-     * cuBLAS computes: Inner = -2 · X_batch · X^T
+     * Step 1: compute kNN from batched dot products.
+     * squared_distance(i, j) = norm[i] + norm[j] - 2 * dot(x_i, x_j).
      */
     log_printf("[DPC-AKNN] Buoc 1/8: kNN via cuBLAS GEMM (n=%d, d=%d, k=%d) [GPU]...\n", n, d, model->k);
     start_step = get_time_sec();
@@ -533,10 +525,10 @@ void dpcaknn_gpu_fit(DPCAKNN_GPU* model, const float* h_X, int n, int d) {
         float alpha = -2.0f, beta_val = 0.0f;
         for (int b = 0; b < n; b += gemm_bs) {
             int bs = (b + gemm_bs <= n) ? gemm_bs : (n - b);
-            /* cublasSgemm: C[n×bs col-major] = alpha * op(A)[n×d] * op(B)[d×bs]
-             * A = d_X (d×n col-major = n×d row-major), transa=T → n×d
-             * B = d_X+b*d (d×bs col-major = bs×d row-major), transb=N → d×bs
-             * C = d_inner (n×bs col-major, ldc=n)
+            /*
+             * cublasSgemm computes C[n, bs] in column-major order.
+             * A views d_X as [d, n] and transposes it to [n, d].
+             * B views the current row-major batch as [d, bs].
              * Result: C[j, i_batch] = -2 * dot(X[j], X[b+i_batch])
              * Kernel reads: inner[j + i_batch * n]
              */
@@ -560,18 +552,14 @@ void dpcaknn_gpu_fit(DPCAKNN_GPU* model, const float* h_X, int n, int d) {
     end_step = get_time_sec();
     log_printf("[DPC-AKNN]   -> Xong. (%.3f s)\n", end_step - start_step);
 
-    /*
-     * Buoc 2: d_c toan cuc theo Eq. (6)-(9). Du lieu dau vao chi con n*k.
-     */
+    /* Step 2: compute the global cutoff distance from n * k values. */
     log_printf("[DPC-AKNN] Buoc 2/8: Tinh d_c thich ung [HOST]...\n");
     start_step = get_time_sec();
     model->d_c = compute_dc_host(model->h_knn_distances, n, model->k);
     end_step = get_time_sec();
     log_printf("[DPC-AKNN]   -> d_c = %f (%.3f s)\n", model->d_c, end_step - start_step);
 
-    /*
-     * Buoc 3: rho va delta.
-     */
+    /* Step 3: compute rho and delta. */
     log_printf("[DPC-AKNN] Buoc 3/8a: Tinh rho [GPU]...\n");
     start_step = get_time_sec();
     compute_rho_kernel<<<grid, block>>>(model->d_knn_distances, model->d_rho, model->d_c, n, model->k);
@@ -604,41 +592,33 @@ void dpcaknn_gpu_fit(DPCAKNN_GPU* model, const float* h_X, int n, int d) {
     end_step = get_time_sec();
     log_printf("[DPC-AKNN]   -> Xong. (%.3f s)\n", end_step - start_step);
 
-    /* Cleanup GEMM resources */
+    /* Release GEMM resources after the distance stages. */
     cudaFree(d_inner);
     cudaFree(d_norms);
     cublasDestroy(cublas_handle);
 
-    /*
-     * Buoc 4: gamma = rho * delta, lay n_clusters diem lon nhat.
-     */
+    /* Step 4: select the largest n_clusters gamma values. */
     log_printf("[DPC-AKNN] Buoc 4/8: Chon %d tam cum [HOST]...\n", model->n_clusters);
     start_step = get_time_sec();
     select_centers_host(model);
     end_step = get_time_sec();
     log_printf("[DPC-AKNN]   -> Xong. (%.3f s)\n", end_step - start_step);
 
-    /*
-     * Buoc 5: cum nong cot ban dau, giu serial nhung update centroid tang dan.
-     */
+    /* Step 5: build initial core clusters with incremental centroids. */
     log_printf("[DPC-AKNN] Buoc 5/8: Cum nong cot ban dau (BFS) [HOST]...\n");
     start_step = get_time_sec();
     build_initial_clusters_host(model, h_X);
     end_step = get_time_sec();
     log_printf("[DPC-AKNN]   -> Xong. (%.3f s)\n", end_step - start_step);
 
-    /*
-     * Buoc 6: ma tran lien ket A theo Eq. (10)-(11), chạy trên Host (CPU).
-     */
+    /* Step 6: process Equations (10)-(11) on the host. */
     log_printf("[DPC-AKNN] Buoc 6/8: Ma tran lien ket A [HOST]...\n");
     start_step = get_time_sec();
     association_loop_cpu(model);
     end_step = get_time_sec();
     log_printf("[DPC-AKNN]   -> Xong. (%.3f s)\n", end_step - start_step);
 
-    /*
-     * Buoc 7 va 8: voting va vet can ngoai lai tren GPU.
-     */
+    /* Steps 7 and 8: refine labels and assign remaining points on the GPU. */
     log_printf("[DPC-AKNN] Buoc 7/8: Bau chon sua loi [GPU]...\n");
     start_step = get_time_sec();
     voting_gpu(model);

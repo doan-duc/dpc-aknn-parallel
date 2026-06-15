@@ -1,9 +1,4 @@
-/*
- * io.c - Triển khai tiện ích I/O cho bản CPU Parallel.
- *
- * Mục đích: Đọc dữ liệu CSV, ghi nhãn phân cụm, tạo thư mục output.
- * Song song hóa: Không song song (I/O tuần tự theo thiết kế).
- */
+/* Serial CSV, output-directory, timestamp, and logging utilities. */
 #include "io.h"
 
 #include <ctype.h>
@@ -21,7 +16,7 @@
 #  define MKDIR(p) mkdir((p), 0755)
 #endif
 
-/* ─── Hàm nội bộ ───────────────────────────────────────────────────────── */
+/* Internal helpers. */
 
 static int count_columns(const char* line) {
     int cols = 1;
@@ -30,15 +25,12 @@ static int count_columns(const char* line) {
     return cols;
 }
 
-/* ─── API công khai ─────────────────────────────────────────────────────── */
+/* Public API. */
 
 real_t* io_read_matrix(const char* filepath, int* n_out, int* d_out) {
     /*
-     * io_read_matrix - Đọc file CSV thành ma trận real_t.
-     *
-     * Mục đích: Nạp dữ liệu đầu vào dạng row-major trước Bước 1 (kNN).
-     * Lưu ý: Bỏ qua các dòng trống; cột đầu tiên quyết định số chiều d.
-     * Caller có trách nhiệm free() con trỏ trả về.
+     * Empty lines are ignored. The first non-empty row determines the
+     * matrix width. The caller owns the returned row-major buffer.
      */
     FILE* fp = fopen(filepath, "r");
     if (!fp) return NULL;
@@ -74,17 +66,14 @@ real_t* io_read_matrix(const char* filepath, int* n_out, int* d_out) {
 
 int* io_read_labels(const char* filepath, int* n_out) {
     /*
-     * io_read_labels - Đọc file nhãn CSV 1 cột vào mảng int.
-     *
-     * Mục đích: Nạp nhãn ground-truth để tính ARI, NMI, ACC.
-     * Lưu ý: Bỏ qua dòng header nếu không parse được thành số nguyên.
-     * Caller có trách nhiệm free() con trỏ trả về.
+     * Non-integer rows, including an optional header, are ignored. The
+     * caller owns the returned label buffer.
      */
     FILE* fp = fopen(filepath, "r");
     if (!fp) return NULL;
 
     char line[256];
-    /* Đếm số dòng số */
+    /* Count rows that contain a valid integer label. */
     int n = 0;
     while (fgets(line, sizeof(line), fp)) {
         char* end;
@@ -109,12 +98,7 @@ int* io_read_labels(const char* filepath, int* n_out) {
 }
 
 void io_write_labels(const char* filepath, const int* labels, int n) {
-    /*
-     * io_write_labels - Ghi nhãn phân cụm ra file CSV 1 cột.
-     *
-     * Mục đích: Lưu kết quả để Python đọc tính metric và vẽ biểu đồ.
-     * Định dạng: header "label", mỗi dòng là 1 số nguyên.
-     */
+    /* Write a header followed by one integer label per row. */
     FILE* fp = fopen(filepath, "w");
     if (!fp) return;
     fprintf(fp, "label\n");
@@ -123,12 +107,7 @@ void io_write_labels(const char* filepath, const int* labels, int n) {
 }
 
 int io_ensure_output_dirs(void) {
-    /*
-     * io_ensure_output_dirs - Tạo toàn bộ thư mục output.
-     *
-     * Mục đích: Tránh lỗi "file not found" khi ghi kết quả.
-     * Ghi chú: MKDIR() trả về lỗi nếu thư mục đã tồn tại — bỏ qua điều đó.
-     */
+    /* Existing-directory errors are intentionally ignored. */
     MKDIR(OUTPUT_DIR);
     MKDIR(LABELS_DIR);
     MKDIR(LOG_DIR);
@@ -136,12 +115,7 @@ int io_ensure_output_dirs(void) {
 }
 
 const char* io_timestamp(void) {
-    /*
-     * io_timestamp - Tạo chuỗi thời gian cho tên file output.
-     *
-     * Mục đích: Tránh ghi đè kết quả giữa các lần chạy.
-     * Lưu ý: Dùng static buffer — không thread-safe.
-     */
+    /* The static buffer is overwritten on each call and is not thread-safe. */
     static char buffer[32];
     time_t now = time(NULL);
     struct tm* tm_now = localtime(&now);
@@ -164,12 +138,12 @@ void io_init_logging(const char* log_filename) {
 void io_log(const char* fmt, ...) {
     va_list args;
     
-    // In ra stdout
+    /* Write to stdout. */
     va_start(args, fmt);
     vprintf(fmt, args);
     va_end(args);
     
-    // In ra file log
+    /* Mirror the message to the log file when logging is enabled. */
     if (g_log_file) {
         va_start(args, fmt);
         vfprintf(g_log_file, fmt, args);

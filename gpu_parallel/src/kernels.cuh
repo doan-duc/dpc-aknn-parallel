@@ -1,14 +1,8 @@
-/*
- * kernels.cuh - Khai báo CUDA kernel cho DPC-AKNN.
- *
- * Mục đích: Tách phần song song hóa GPU khỏi host orchestration.
- * Bài báo: Eq. (4), Eq. (5), Eq. (10) và bước voting Section 3.2.3.
- * Song song hóa: CUDA kernel.
- */
+/* CUDA kernels used by the DPC-AKNN host orchestration layer. */
 #ifndef KERNELS_CUH
 #define KERNELS_CUH
 
-// IntelliSense-only CUDA keyword shims.
+/* CUDA keyword shims used only by IntelliSense. */
 #ifdef __INTELLISENSE__
 #define __global__
 #define __host__
@@ -49,7 +43,7 @@ __global__ void knn_voting_kernel(const int* knn_indices, const float* knn_dista
 __global__ void allocate_remaining_kernel(const int* knn_indices, const float* knn_distances,
                                           int* labels, int n, int k, int n_c);
 
-/* ── v3: cuBLAS GEMM kernels ──────────────────────────────────────────── */
+/* Kernels that consume batched cuBLAS GEMM output. */
 __global__ void compute_norms_kernel(const float* X, float* norms, int n, int d);
 __global__ void topk_from_gemm_kernel(const float* inner, const float* norms,
                                        int* knn_indices, float* knn_distances,

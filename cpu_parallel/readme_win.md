@@ -9,7 +9,6 @@ mingw32-make clean
 # Biên dịch chương trình
 mingw32-make
 ```
-
 ### 2. Chạy chương trình (Run)
 
 ```powershell

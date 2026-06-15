@@ -1,10 +1,4 @@
-/*
- * dpc_aknn.h - Giao diện DPC-AKNN bản CUDA.
- *
- * Mục đích: Quản lý trạng thái host/device của mô hình.
- * Bài báo: Algorithm 1, Eq. (4) đến Eq. (12).
- * Song song hóa: CUDA kernel cho các bước độc lập.
- */
+/* Host and device state for the CUDA DPC-AKNN implementation. */
 #ifndef DPC_AKNN_GPU_H
 #define DPC_AKNN_GPU_H
 

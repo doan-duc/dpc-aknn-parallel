@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-/* ─── Tính ARI (Adjusted Rand Index) ────────────────────────────────────── */
+/* Compute the Adjusted Rand Index. */
 double compute_ari(const int* y_true, const int* y_pred, int n) {
     int max_true = 0, max_pred = 0;
     for (int i = 0; i < n; i++) {
@@ -42,7 +42,7 @@ double compute_ari(const int* y_true, const int* y_pred, int n) {
     return (sum_nij - expected) / (max_idx - expected);
 }
 
-/* ─── Tính NMI (Normalized Mutual Information) ───────────────────────────── */
+/* Compute normalized mutual information. */
 double compute_nmi(const int* y_true, const int* y_pred, int n) {
     int max_true = 0, max_pred = 0;
     for (int i = 0; i < n; i++) {
@@ -81,7 +81,7 @@ double compute_nmi(const int* y_true, const int* y_pred, int n) {
     return denom > 1e-12 ? mi / denom : 0.0;
 }
 
-/* ─── Thuật toán Hungarian để tìm Matching Trọng Số Lớn Nhất (O(N^3)) ─────────── */
+/* Find a maximum-weight matching with the O(N^3) Hungarian algorithm. */
 static int hungarian_max_weight(const int* weight_matrix, int N) {
     if (N == 0) return 0;
     int max_w = 0;
@@ -148,7 +148,7 @@ static int hungarian_max_weight(const int* weight_matrix, int N) {
     return ans;
 }
 
-/* ─── Tính ACC (Clustering Accuracy) bằng thuật toán Hungarian ─────────── */
+/* Compute clustering accuracy using Hungarian matching. */
 double compute_acc(const int* y_true, const int* y_pred, int n) {
     int max_true = 0, max_pred = 0;
     for (int i = 0; i < n; i++) {
@@ -156,7 +156,7 @@ double compute_acc(const int* y_true, const int* y_pred, int n) {
         if (y_pred[i] > max_pred) max_pred = y_pred[i];
     }
     
-    /* Phải tạo ma trận vuông kích thước N x N cho thuật toán Hungarian */
+    /* Hungarian matching requires a square weight matrix. */
     int N = (max_true > max_pred ? max_true : max_pred) + 1;
     
     int* table = (int*)calloc((size_t)(N * N), sizeof(int));

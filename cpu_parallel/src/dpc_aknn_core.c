@@ -1,65 +1,13 @@
 /*
- * dpc_aknn_core.c  —  DPC-AKNN, không dùng D[n×n].
+ * Core DPC-AKNN computations using an O(n * k) neighbor representation.
  *
- * ═══════════════════════════════════════════════════════════════════════════
- * DANH SÁCH FIX SO VỚI PHIÊN BẢN GỐC:
- *
- * 🔴 [FIX-1] step4 + step7: core_sort_desc O(n²) → sort_desc_by_value O(n log n)
- *      core_sort_desc dùng selection sort, comment ghi "chỉ dùng cho n_clusters
- *      (≤20)" nhưng cả step4 lẫn step7 gọi với n=70000 → ~4.9 tỷ phép so sánh
- *      đơn luồng → bước 4 tốn 15s, bước 7 tốn thêm vài giây chỉ cho sort.
- *      Fix: hàm nội bộ sort_desc_by_value dùng qsort O(n log n).
- *
- * 🔴 [FIX-2] step7: calloc/free trong parallel for → pre-alloc per-thread
- *      n thread đồng thời gọi calloc(n_clusters) → tranh heap lock → serialize ẩn.
- *      Fix: cấp phát T×n_clusters int ngoài vùng parallel, mỗi thread dùng slot
- *      riêng [tid*n_clusters .. (tid+1)*n_clusters), không còn tranh lock.
- *
- * 🟡 [FIX-3] step5: core_compute_centroid O(n)/enqueue → incremental O(d)
- *      BFS enqueue tối đa O(n) điểm, mỗi lần gọi core_compute_centroid scan
- *      toàn bộ n → tổng O(n²·d). Với n=70000, d=784: ~3.8 tỷ FLOP chỉ centroid.
- *      Fix: duy trì csum[] running sum và cnt, update O(d) khi thêm mỗi điểm.
- *
- * 🟡 [FIX-4] step1: qsort O(n log n) để tìm k láng giềng → max-heap O(n log k)
- *      k=15, n=70000: log(n)/log(k) ≈ 4.2× ít phép so sánh hơn.
- *      Buffer giảm từ O(n) → O(k) mỗi thread: 17.9MB → 3.8KB (với T=16).
- *
- * 🟢 [FIX-5] step6 build_association_matrix: memset toàn cục → init per-row
- *      Mỗi thread init row của mình ngay trước khi dùng → NUMA locality tốt hơn.
- *
- * 🟢 [FIX-B] step2: serial reduction O(n) → parallel reduction O(n/T)
- *      mean_c và var_c dùng omp reduction(+:) thay serial loop.
- *
- * 🟢 [FIX-C] step3b: serial max_dist O(n) → parallel reduction(max:)
- *      max_dist cho điểm top dùng omp reduction thay serial.
- *
- * 🔴 [FIX-E] step5: khôi phục bridge node BFS behavior từ v1
- *      v1 enqueue TẤT CẢ k láng giềng (kể cả đã labeled), code trước đó
- *      chỉ enqueue unlabeled → mất bridge → cụm co lại → ARI giảm.
- *      Fix: tách enqueue ra khỏi label assignment.
- *
- * 🔴 [FIX-F] step6: rebuild toàn bộ A mỗi vòng O(n²k) → incremental O(nk)
- *      Build reverse-kNN index 1 lần, mỗi vòng chỉ update cột r* cho
- *      các u ∈ rknn[best_point]. Speedup ~1000× trên n=70K.
- *
- * 🔴 [FIX-G] step7: false sharing trên counts_pool → pad 64B + _aligned_malloc
- *      n_clusters=10 → slot=40B < 64B cache line → thread invalidate nhau.
- *      Fix: pad slot lên 16 ints = 64B, căn chỉnh base address.
- *
- * 🟡 [FIX-H] step8: best_cl=0 default → best_cl=-1 + fallback tường minh
- *      Khi không có neighbor nào labeled, tránh gán nhầm mặc định cluster 0.
- *
- * ✅ Giữ nguyên (đã đúng):
- *      step1  pre-alloc per-thread buffer + max-heap O(n log k)
- *      step3b schedule(static) — dynamic chậm hơn 11s trên high-dim data
- *      step5  serial BFS — thứ tự claim điểm là tính chất thuật toán
- *      step7/8 double-buffer pattern
- * ═══════════════════════════════════════════════════════════════════════════
+ * Distance-heavy stages evaluate squared distances directly from X and use
+ * exact early termination when a candidate already exceeds the active bound.
  */
 #include "dpc_aknn_core.h"
 
 #include <math.h>
-#include <malloc.h>  /* _aligned_malloc / _aligned_free (Windows) */
+#include <malloc.h>  /* _aligned_malloc and _aligned_free on Windows. */
 #include <stdlib.h>
 #include <string.h>
 
@@ -67,11 +15,11 @@
 #include <omp.h>
 #endif
 
-/* ── Tiện ích nội bộ ────────────────────────────────────────────────────── */
+/* Internal helpers. */
 
 typedef struct { real_t dist; int idx; } Neighbor;
 
-/* So sanh Neighbor: dist tang dan, tie-break theo idx. */
+/* Sort neighbors by ascending distance, then by ascending index. */
 static int cmp_neighbor_asc(const void* a, const void* b) {
     const Neighbor* x = (const Neighbor*)a;
     const Neighbor* y = (const Neighbor*)b;
@@ -80,25 +28,22 @@ static int cmp_neighbor_asc(const void* a, const void* b) {
     return x->idx - y->idx;
 }
 
-/* ── [FIX-1] sort_desc_by_value: O(n log n) thay O(n²) ─────────────────── */
 /*
- * Sắp xếp order[] giảm dần theo values[], tie-break: index nhỏ đứng trước.
- * Dùng qsort trên mảng ValIdx tạm — không cần biến global, thread-safe.
- * Chỉ dùng hàm này khi n lớn (step4, step7).
- * core_sort_desc giữ nguyên cho n_clusters ≤ 20 (đúng với comment gốc).
+ * Build a descending index order in O(n log n). Equal values are ordered by
+ * ascending source index, and all comparison state remains local.
  */
 typedef struct { real_t val; int idx; } ValIdx;
 
-/* So sanh ValIdx: val giam dan, tie-break theo idx. */
+/* Sort value-index pairs by descending value, then ascending index. */
 static int cmp_validx_desc(const void* a, const void* b) {
     const ValIdx* x = (const ValIdx*)a;
     const ValIdx* y = (const ValIdx*)b;
     if (y->val > x->val) return  1;
     if (y->val < x->val) return -1;
-    return x->idx - y->idx; /* tie-break: index nhỏ hơn đứng trước */
+    return x->idx - y->idx; /* Prefer the smaller index for equal values. */
 }
 
-/* Tao order[] sap xep giam theo values[]. */
+/* Populate order with indices sorted by descending values. */
 static void sort_desc_by_value(const real_t* values, int* order, int n) {
     ValIdx* vi = (ValIdx*)malloc((size_t)n * sizeof(ValIdx));
     for (int i = 0; i < n; i++) { vi[i].val = values[i]; vi[i].idx = i; }
@@ -107,9 +52,9 @@ static void sort_desc_by_value(const real_t* values, int* order, int n) {
     free(vi);
 }
 
-/* Selection sort cho n nho, sap xep giam theo values. */
+/* Sort a small index set by descending value using selection sort. */
 void core_sort_desc(const real_t* values, int* order, int n) {
-    /* [SERIAL] Selection sort — CHỈ dùng khi n nhỏ (n_clusters ≤ 20). */
+    /* This helper is intended for small arrays such as center lists. */
     for (int i = 0; i < n; i++) order[i] = i;
     for (int i = 0; i < n - 1; i++)
         for (int j = i + 1; j < n; j++)
@@ -119,10 +64,9 @@ void core_sort_desc(const real_t* values, int* order, int n) {
             }
 }
 
-/* Tinh centroid cua mot cum tu labels va X. */
+/* Compute a cluster centroid from X and the current labels. */
 void core_compute_centroid(const real_t* X, const int* labels,
                             int cluster_id, int n, int d, real_t* centroid) {
-    /* [SERIAL] Giữ nguyên — giao diện công khai, không gọi trong BFS nữa. */
     int count = 0;
     for (int p = 0; p < d; p++) centroid[p] = 0.0;
     for (int i = 0; i < n; i++) {
@@ -134,14 +78,12 @@ void core_compute_centroid(const real_t* X, const int* labels,
         for (int p = 0; p < d; p++) centroid[p] /= (real_t)count;
 }
 
-/* ── [FIX-4] Max-heap O(n log k) cho bước 1 ─────────────────────────────── */
 /*
- * Max-heap kích thước k: luôn giữ k phần tử nhỏ nhất đã thấy.
- * Root = phần tử LỚN NHẤT → khi gặp dist < root.dist, replace root và sift down.
- * Complexity: O(n log k) thay O(n log n) của qsort toàn bộ.
- * k=15, n=70000: tiết kiệm ~4.2× phép so sánh.
+ * A size-k max-heap retains the k smallest candidates seen so far. The root
+ * is the current largest retained distance, so each better candidate replaces
+ * the root in O(log k) time.
  */
-/* Sift-down de khoi phuc tinh chat max-heap. */
+/* Restore the max-heap property below index i. */
 static void heap_sift_down(Neighbor* h, int size, int i) {
     while (1) {
         int largest = i;
@@ -158,7 +100,7 @@ static void heap_sift_down(Neighbor* h, int size, int i) {
     }
 }
 
-/* Chen phan tu vao max-heap. */
+/* Insert one candidate into the max-heap. */
 static void heap_push(Neighbor* h, int* size, Neighbor val) {
     int i = (*size)++;
     h[i] = val;
@@ -172,39 +114,20 @@ static void heap_push(Neighbor* h, int* size, Neighbor val) {
     }
 }
 
-/* Thay root va khoi phuc max-heap. */
+/* Replace the root and restore the max-heap property. */
 static void heap_replace_root(Neighbor* h, int size, Neighbor val) {
     h[0] = val;
     heap_sift_down(h, size, 0);
 }
 
-/* ── BƯỚC 1: kNN trực tiếp từ X ─────────────────────────────────────────── */
-
-/* Tinh kNN bang max-heap va early-exit. */
+/* Step 1: Compute k-nearest neighbors with a max-heap and exact pruning. */
 void step1_compute_knn(const real_t* X, int* knn_idx, real_t* knn_dist,
                         int n, int d, int k) {
     /*
-     * [DOMAIN] Phân rã miền theo điểm i.
-     *
-     * [FIX-4] Max-heap O(n log k) thay qsort O(n log n).
-     *
-     * [OPT-1] Heap lưu dist² thay dist — loại bỏ ~n² phép sqrt():
-     *   sqrt() là hàm đơn điệu tăng: a < b <=> sqrt(a) < sqrt(b).
-     *   Mọi phép so sánh trong heap hoạt động đúng với dist².
-     *   Chỉ gọi sqrt() k lần khi xuất ra knn_dist[] ở cuối.
-     *   Tiết kiệm: n=70000 => ~4.9 ty phep sqrt() => 0 phep trong vong lap chinh.
-     *
-     * [OPT-2] Early Exit khi tính khoảng cách:
-     *   Nguong = dist² cua phan tu LON NHAT trong heap (heap[0].dist).
-     *   Neu heap chua day (heap_sz < k): nguong = +inf, khong cat som.
-     *   Neu heap da day: dung dist_euclid_sq_early(), cong don tung chieu,
-     *   cham nguong la dung luon — diem j do chac chan khong lot top-k.
-     *   Voi d=784, diem xa thuong bi loai sau ~10-20 chieu dau tien.
-     *
-     * Memory model:
-     *   X[]             : read-only -> khong conflict.
-     *   knn_idx/knn_dist: schedule(static) -> moi thread ghi dai rieng.
-     *   bufs[tid]       : slot rieng cua thread -> khong conflict.
+     * Each OpenMP iteration owns one output row and uses a thread-local heap.
+     * The heap stores squared distances, preserving ordering without square
+     * roots. Once full, its root is the pruning threshold for exact early
+     * termination. Square roots are applied only to the final k distances.
      */
     int nthreads = 1;
 #ifdef _OPENMP
@@ -229,12 +152,12 @@ void step1_compute_knn(const real_t* X, int* knn_idx, real_t* knn_dist,
 
             real_t dsq;
             if (heap_sz < k) {
-                /* Heap chua day: nguong = +inf, tinh du chieu [OPT-1] */
+                /* Fill the heap before applying a distance threshold. */
                 dsq = dist_euclid_sq(X, i, j, d);
                 Neighbor nb = { dsq, j };
                 heap_push(heap, &heap_sz, nb);
             } else {
-                /* [OPT-2] Heap da day: early exit voi nguong = heap[0].dist */
+                /* Prune candidates that exceed the largest retained distance. */
                 dsq = dist_euclid_sq_early(X, i, j, d, heap[0].dist);
                 if (dsq < heap[0].dist ||
                     (dsq == heap[0].dist && j < heap[0].idx)) {
@@ -243,12 +166,12 @@ void step1_compute_knn(const real_t* X, int* knn_idx, real_t* knn_dist,
                 }
             }
         }
-        /* Sort k phan tu tang dan -- O(k log k), k nho */
+        /* Sort the retained neighbors by ascending distance. */
         qsort(heap, (size_t)heap_sz, sizeof(Neighbor), cmp_neighbor_asc);
-        /* [OPT-1] sqrt() chi goi k lan o day, khong phai trong vong lap n */
+        /* Convert the final squared distances to Euclidean distances. */
         for (int t = 0; t < k; t++) {
             knn_idx [i * k + t] = heap[t].idx;
-            knn_dist[i * k + t] = sqrt(heap[t].dist); /* dist^2 -> dist */
+            knn_dist[i * k + t] = sqrt(heap[t].dist);
         }
     }
 
@@ -256,11 +179,8 @@ void step1_compute_knn(const real_t* X, int* knn_idx, real_t* knn_dist,
     free(bufs);
 }
 
-/* ── BƯỚC 2: d_c ────────────────────────────────────────────────────────── */
-
-/* Tinh d_c thich ung tu knn_dist cua tung diem. */
+/* Step 2: Compute the adaptive cutoff distance from per-point kNN distances. */
 real_t step2_compute_dc(const real_t* knn_dist, int n, int k) {
-    /* [DOMAIN + SERIAL] Giữ nguyên. */
     real_t* d_ci = (real_t*)malloc((size_t)n * sizeof(real_t));
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < n; i++) {
@@ -274,7 +194,7 @@ real_t step2_compute_dc(const real_t* knn_dist, int n, int k) {
         }
         d_ci[i] = mean + sqrt(var / (real_t)k);
     }
-    /* [FIX-B] Parallel reduction thay serial loop */
+    /* Reduce the global mean and variance in parallel. */
     real_t mean_c = 0.0;
 #pragma omp parallel for reduction(+:mean_c) schedule(static)
     for (int i = 0; i < n; i++) mean_c += d_ci[i];
@@ -290,12 +210,9 @@ real_t step2_compute_dc(const real_t* knn_dist, int n, int k) {
     return mean_c + sigma_c;
 }
 
-/* ── BƯỚC 3a: ρ ─────────────────────────────────────────────────────────── */
-
-/* Tinh mat do cuc bo rho tu knn_dist va d_c. */
+/* Step 3a: Compute local density from kNN distances and d_c. */
 void step3a_compute_rho(const real_t* knn_dist,
                          real_t* rho, real_t d_c, int n, int k) {
-    /* [DOMAIN] Giữ nguyên. */
     real_t safe_dc = d_c > EPS_DISTANCE ? d_c : EPS_DISTANCE;
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < n; i++) {
@@ -308,27 +225,20 @@ void step3a_compute_rho(const real_t* knn_dist,
     }
 }
 
-/* ── BƯỚC 3b: δ ─────────────────────────────────────────────────────────── */
-
-/* Tinh delta: khoang cach toi diem co mat do cao hon gan nhat. */
+/* Step 3b: Find the nearest point with higher density for each point. */
 void step3b_compute_delta(const real_t* X, const real_t* rho,
                            real_t* delta, int n, int d) {
     /*
-     * [DOMAIN] schedule(static) — đo được dynamic(32) chậm hơn 11s với d=784.
-     *
-     * [OPT-1] dist² thay dist — bỏ sqrt() trong vòng lặp.
-     * [OPT-2] Early Exit cho vòng lặp tìm min (Phần 2):
-     *   best_sq = bình phương khoảng cách nhỏ nhất tìm được.
-     *   Nếu partial sum > best_sq → chắc chắn xa hơn → cắt ngay.
+     * Static scheduling distributes independent points predictably. Squared
+     * distances avoid square roots during the search, and best_sq provides
+     * an exact pruning threshold for each candidate.
      */
     int top = 0;
     for (int i = 1; i < n; i++)
         if (rho[i] > rho[top] || (rho[i] == rho[top] && i < top))
             top = i;
 
-    /* [FIX-C] Parallel reduction cho max_dist
-     * [OPT-1] Dùng dist² trong vòng lặp, sqrt() 1 lần ở cuối.
-     * max(sqrt(a), sqrt(b)) = sqrt(max(a, b)) — đơn điệu tăng. */
+    /* Compute the top-density point's maximum distance in parallel. */
     real_t max_dist_sq = 0.0;
 #pragma omp parallel for reduction(max:max_dist_sq) schedule(static)
     for (int j = 0; j < n; j++) {
@@ -338,8 +248,7 @@ void step3b_compute_delta(const real_t* X, const real_t* rho,
     real_t max_dist = sqrt(max_dist_sq);
     delta[top] = max_dist;
 
-    /* Phần 2: delta[i] = min dist tới điểm có rho cao hơn.
-     * [OPT-2] Early Exit: best_sq làm ngưỡng cắt sớm. */
+    /* Compute the minimum distance to a point with higher density. */
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < n; i++) {
         if (i == top) continue;
@@ -355,16 +264,10 @@ void step3b_compute_delta(const real_t* X, const real_t* rho,
     }
 }
 
-/* ── BƯỚC 4: Chọn tâm cụm ───────────────────────────────────────────────── */
-
-/* Tinh gamma va chon top tam cum. */
+/* Step 4: Compute gamma and select the highest-scoring centers. */
 void step4_select_centers(const real_t* rho, const real_t* delta,
                            real_t* gamma_out,
                            int n, int n_clusters, int* centers_out) {
-    /*
-     * [FIX-1] sort_desc_by_value O(n log n) thay core_sort_desc O(n²).
-     * Bước 4 tốn 15.290s trong log do sort — fix này loại bỏ hầu hết thời gian đó.
-     */
     for (int i = 0; i < n; i++) gamma_out[i] = rho[i] * delta[i];
     int* order = (int*)malloc((size_t)n * sizeof(int));
     sort_desc_by_value(gamma_out, order, n);
@@ -372,9 +275,7 @@ void step4_select_centers(const real_t* rho, const real_t* delta,
     free(order);
 }
 
-/* ── BƯỚC 5: Cụm nòng cốt ban đầu ───────────────────────────────────────── */
-
-/* Xay cum ban dau: one-hop + kiem tra centroid. */
+/* Step 5: Build initial clusters with one-hop expansion and centroid checks. */
 void step5_build_initial_clusters(int* labels, const int* centers,
                                    const real_t* X,
                                    const int* knn_idx,
@@ -382,16 +283,10 @@ void step5_build_initial_clusters(int* labels, const int* centers,
                                    real_t d_c,
                                    int n, int d, int k, int n_clusters) {
     /*
-     * [SERIAL] One-hop expansion — chỉ xét kNN của center và kNN của
-     * các điểm seed, không enqueue điểm mới nhận để tránh lan rộng đệ quy.
-     *
-     * [FIX-3] Incremental centroid O(d) thay core_compute_centroid O(n):
-     *   Duy trì csum[d] = tổng tọa độ các điểm đã nhận, cnt = số điểm.
-     *   Khi thêm điểm x_q: csum[p] += X[x_q*d+p] cho p=0..d-1  → O(d).
-     *   centroid[p] = csum[p] / cnt khi cần kiểm tra điều kiện 3  → O(d).
-     *   Tổng: O(n·d) thay O(n²·d) — với n=70000 tiết kiệm 70000× FLOP.
-     *
-     * Memory: csum, centroid, queue là local của hàm → không share.
+     * Expansion is serial because each accepted point changes the active
+     * cluster. The queue contains only the center's k-nearest neighbors, so
+     * newly accepted points do not trigger recursive expansion. csum keeps
+     * centroid updates at O(d) per accepted point.
      */
     real_t* csum     = (real_t*)malloc((size_t)d * sizeof(real_t));
     real_t* centroid = (real_t*)malloc((size_t)d * sizeof(real_t));
@@ -411,19 +306,20 @@ void step5_build_initial_clusters(int* labels, const int* centers,
         }
 
         int head = 0, tail = 0;
-        /* [FIX-E] Giữ tập seed đầy đủ từ v1:
-         * Enqueue TẤT CẢ k láng giềng của center (kể cả đã labeled) để
-         * đảm bảo các điểm seed không bị bỏ sót. Không lan rộng đệ quy. */
+        /*
+         * Enqueue every center neighbor, including points already claimed by
+         * another cluster, so each seed can contribute its own neighbors.
+         */
         for (int t = 0; t < k; t++) {
             int nb = knn_idx[center * k + t];
             if (labels[nb] == -1) {
                 labels[nb] = c;
-                for (int p = 0; p < d; p++) csum[p] += X[nb*d+p]; /* [FIX-3] O(d) */
+                for (int p = 0; p < d; p++) csum[p] += X[nb*d+p];
                 cnt++;
             }
-            queue[tail++] = nb; /* seed queue: chỉ chứa kNN của center */
+            queue[tail++] = nb; /* The seed queue contains only center neighbors. */
         }
-        /* Centroid ban đầu từ csum — O(d) */
+        /* Initialize the centroid from the coordinate sum. */
         if (cnt > 0)
             for (int p = 0; p < d; p++) centroid[p] = csum[p] / (real_t)cnt;
 
@@ -448,7 +344,7 @@ void step5_build_initial_clusters(int* labels, const int* centers,
 
                 labels[x_q] = c;
 
-                /* [FIX-3] Incremental update — không gọi core_compute_centroid */
+                /* Update the centroid incrementally after accepting x_q. */
                 for (int p = 0; p < d; p++) csum[p] += X[x_q*d+p];
                 cnt++;
                 for (int p = 0; p < d; p++) centroid[p] = csum[p] / (real_t)cnt;
@@ -460,28 +356,20 @@ void step5_build_initial_clusters(int* labels, const int* centers,
     free(queue);
 }
 
-/* ── BƯỚC 6: Ma trận liên kết A ─────────────────────────────────────────── */
 /*
- * [FIX-F] Incremental update theo Eq.(11) của bài báo.
+ * Step 6: Assign remaining points using the association score from Eq. (11).
  *
- * Phiên bản cũ: rebuild TOÀN BỘ ma trận A mỗi vòng → O(n_u² × k).
- * Phiên bản mới:
- *   1. Build reverse-kNN index 1 lần O(nk).
- *   2. Build A lần đầu (parallel) O(n_u × k).
- *   3. Mỗi vòng chỉ update cột r* cho các u ∈ rknn[best_point] O(k).
- *   → Tổng: O(n_u × k) + O(n_u × k) = O(n × k) thay O(n² × k).
- *
- * Memory model:
- *   A[] indexed by [point_id × n_clusters], không dùng row mapping.
- *   is_unassigned[] đánh dấu thay vì shift mảng → O(1) xóa.
- *   rknn_data[] read-only sau build → không conflict.
+ * A reverse-kNN index identifies rows affected by each new label. A is built
+ * once, then only the affected association entries are updated. A is indexed
+ * by [point_id * n_clusters], and is_unassigned supports constant-time removal
+ * from the active set.
  */
 
-/* Gan nhan con lai bang A va cap nhat theo rknn. */
+/* Assign remaining labels and update affected reverse-kNN entries. */
 void step6_association_loop(int* labels, const int* knn_idx,
                              const real_t* knn_dist, const real_t* rho,
                              int n, int k, int n_clusters) {
-    /* ── Build reverse-kNN index: rknn[j] = {i : j ∈ kNN(i)} ────────── */
+    /* Build rknn[j] = {i | j is in kNN(i)}. */
     int* rknn_count = (int*)calloc((size_t)n, sizeof(int));
     for (int i = 0; i < n; i++)
         for (int t = 0; t < k; t++)
@@ -501,7 +389,7 @@ void step6_association_loop(int* labels, const int* knn_idx,
             rknn_data[rknn_offset[j] + rknn_count[j]++] = i;
         }
 
-    /* ── Collect unassigned points ───────────────────────────────────── */
+    /* Collect unassigned points. */
     int* unassigned = (int*)malloc((size_t)n * sizeof(int));
     int* is_unassigned = (int*)calloc((size_t)n, sizeof(int));
     int n_u = 0;
@@ -509,7 +397,7 @@ void step6_association_loop(int* labels, const int* knn_idx,
         if (labels[i] < 0) { unassigned[n_u++] = i; is_unassigned[i] = 1; }
     if (n_u == 0) goto cleanup_step6;
 
-    /* ── Build A lần đầu (parallel) ─────────────────────────────────── */
+    /* Build the initial association matrix in parallel. */
     real_t* A = (real_t*)calloc((size_t)n * (size_t)n_clusters, sizeof(real_t));
 
 #pragma omp parallel for schedule(static)
@@ -525,9 +413,9 @@ void step6_association_loop(int* labels, const int* knn_idx,
         }
     }
 
-    /* ── Iterative assignment ────────────────────────────────────────── */
+    /* Assign the strongest remaining association at each iteration. */
     for (int iter = 0; iter < n_u; iter++) {
-        /* find_best — parallel thread-local reduction */
+        /* Find the best association with thread-local candidates. */
         real_t best     = 0.0;
         int    best_pt  = -1;
         int    best_cl  = -1;
@@ -556,11 +444,11 @@ void step6_association_loop(int* labels, const int* knn_idx,
         labels[best_pt] = best_cl;
         is_unassigned[best_pt] = 0;
 
-        /* ── Incremental update theo Eq.(11): chỉ update các u ∈ rknn[best_pt] ── */
+        /* Update Eq. (11) only for reverse neighbors of best_pt. */
         for (int r = rknn_offset[best_pt]; r < rknn_offset[best_pt + 1]; r++) {
             int u = rknn_data[r];
             if (!is_unassigned[u]) continue;
-            /* Tìm khoảng cách u → best_pt trong knn_dist */
+            /* Locate the stored distance from u to best_pt. */
             for (int t = 0; t < k; t++) {
                 if (knn_idx[u * k + t] == best_pt) {
                     real_t dl = knn_dist[u * k + t];
@@ -582,37 +470,23 @@ cleanup_step6:
     free(is_unassigned);
 }
 
-/* ── BƯỚC 7: Bầu chọn sửa lỗi ──────────────────────────────────────────── */
-
-/* Bieu quyet nhan bang kNN, dung double-buffering. */
+/* Step 7: Refine labels with double-buffered kNN voting. */
 void step7_reallocate_by_voting(int* labels, const real_t* rho,
                                  const int* knn_idx,
                                  const real_t* knn_dist,
                                  int n, int k, int n_clusters) {
     /*
-     * [DOMAIN] Double-buffering.
-     *
-     * [FIX-1] sort_desc_by_value O(n log n) thay core_sort_desc O(n²).
-     *
-     * [FIX-2] Pre-alloc counts_pool[T × n_clusters] ngoài parallel for:
-     *   Phiên bản cũ: calloc(n_clusters) bên trong → n thread tranh heap lock.
-     *   Phiên bản mới: counts_pool cấp phát 1 lần, thread tid dùng slot
-     *   [tid*n_clusters .. (tid+1)*n_clusters). Reset O(n_clusters) mỗi iter.
-     *
-     * Memory model (double-buffer):
-     *   labels[]      : read-only trong toàn bộ parallel for → không conflict.
-     *   new_labels[]  : thread ghi new_labels[order[pos]] riêng → không overlap.
-     *   counts_pool[] : thread ghi slot [tid*n_clusters..) riêng → không overlap.
-     *   Không có write conflict → không cần atomic hay mutex ở bất kỳ đâu. ✓
+     * labels remains read-only during the parallel region, while each thread
+     * writes a distinct new_labels entry and uses a private counts_pool slot.
+     * The slots are allocated once outside the loop to avoid allocator
+     * contention.
      */
     int nthreads = 1;
 #ifdef _OPENMP
     nthreads = omp_get_max_threads();
 #endif
 
-    /* [FIX-G] Pad slot lên bội 64B để tránh false sharing.
-     * Với n_clusters=10, slot_ints=16 (64B) thay vì 10 (40B).
-     * _aligned_malloc đảm bảo base address căn chỉnh 64B. */
+    /* Pad each counter slot to a 64-byte boundary to avoid false sharing. */
     int slot_ints = ((n_clusters + 15) / 16) * 16;
 
     int* order       = (int*)malloc((size_t)n * sizeof(int));
@@ -620,7 +494,7 @@ void step7_reallocate_by_voting(int* labels, const real_t* rho,
     int* counts_pool = (int*)_aligned_malloc(
         (size_t)nthreads * (size_t)slot_ints * sizeof(int), 64);
 
-    sort_desc_by_value(rho, order, n); /* [FIX-1] O(n log n) */
+    sort_desc_by_value(rho, order, n);
     memcpy(new_labels, labels, (size_t)n * sizeof(int));
 
 #pragma omp parallel for schedule(static)
@@ -629,13 +503,13 @@ void step7_reallocate_by_voting(int* labels, const real_t* rho,
 #ifdef _OPENMP
         tid = omp_get_thread_num();
 #endif
-        /* [FIX-G] slot riêng, padded 64B — không false sharing */
+        /* Select this thread's cache-line-aligned counter slot. */
         int* counts = counts_pool + (size_t)tid * slot_ints;
         for (int c = 0; c < n_clusters; c++) counts[c] = 0;
 
         int i = order[pos];
         for (int t = 0; t < k; t++) {
-            int lb = labels[knn_idx[i*k+t]]; /* read-only */
+            int lb = labels[knn_idx[i*k+t]]; /* labels is read-only in this loop. */
             if (lb >= 0) counts[lb]++;
         }
 
@@ -657,25 +531,23 @@ void step7_reallocate_by_voting(int* labels, const real_t* rho,
                 real_t mean = cnt > 0 ? sum / (real_t)cnt : 1e100;
                 if (best_cl < 0 || mean < best_mean) { best_mean = mean; best_cl = c; }
             }
-            new_labels[i] = best_cl; /* ghi buffer riêng → không race */
+            new_labels[i] = best_cl; /* Each iteration owns one output element. */
         }
     }
 
     memcpy(labels, new_labels, (size_t)n * sizeof(int));
-    _aligned_free(counts_pool); /* [FIX-G] paired with _aligned_malloc */
+    _aligned_free(counts_pool);
     free(new_labels);
     free(order);
 }
 
-/* ── BƯỚC 8: Vét cạn ngoại lai ──────────────────────────────────────────── */
-
-/* Gan nhan cuoi: chon cum co mean distance nho nhat. */
+/* Step 8: Assign remaining points to the cluster with minimum mean distance. */
 void step8_allocate_remaining(int* labels, const int* knn_idx,
                                const real_t* knn_dist,
                                int n, int k, int n_clusters) {
     /*
-     * [DOMAIN] Double-buffering — giữ nguyên, đã tối ưu.
-     * labels[] read-only, new_labels[] ghi riêng từng thread → không race.
+     * labels remains read-only while each iteration writes one independent
+     * new_labels element.
      */
     int* new_labels = (int*)malloc((size_t)n * sizeof(int));
     memcpy(new_labels, labels, (size_t)n * sizeof(int));
@@ -684,7 +556,7 @@ void step8_allocate_remaining(int* labels, const int* knn_idx,
     for (int i = 0; i < n; i++) {
         if (labels[i] >= 0) continue;
         real_t best = 1e100;
-        int best_cl = -1; /* [FIX-H] tường minh: -1 = chưa tìm thấy cụm nào */
+        int best_cl = -1; /* No candidate cluster has been found yet. */
         for (int c = 0; c < n_clusters; c++) {
             real_t sum = 0.0; int cnt = 0;
             for (int t = 0; t < k; t++) {
@@ -697,7 +569,7 @@ void step8_allocate_remaining(int* labels, const int* knn_idx,
                 if (mean < best) { best = mean; best_cl = c; }
             }
         }
-        /* [FIX-H] Nếu không có neighbor nào labeled, fallback cluster 0 */
+        /* Fall back to cluster 0 when no neighbor has a valid label. */
         new_labels[i] = (best_cl >= 0) ? best_cl : 0;
     }
     memcpy(labels, new_labels, (size_t)n * sizeof(int));

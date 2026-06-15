@@ -1,13 +1,13 @@
 /*
- * main.c - Entry point cho cpu_parallel DPC-AKNN.
+ * CPU entry point for DPC-AKNN.
  *
- * Sử dụng: ./dpc_aknn_cpu --input <X.csv> [--labels <y.csv>] [--clusters <k>]
+ * Usage:
+ *   ./dpc_aknn_cpu --input <X.csv> [--labels <y.csv>]
+ *                  [--clusters <n>] [--k <k>]
  *
- * Tham số:
- *   --input   <file>  : File dữ liệu đầu vào (bắt buộc)
- *   --labels  <file>  : File nhãn ground-truth để tính ARI/NMI/ACC (tùy chọn)
- *   --clusters <n>    : Số cụm (mặc định: DEFAULT_N_CLUSTERS trong config.h)
- *   --k <k>           : Số láng giềng (mặc định: DEFAULT_K trong config.h)
+ * --input specifies the input matrix.
+ * --labels optionally enables ARI, NMI, and ACC evaluation.
+ * --clusters and --k override the defaults in config.h.
  */
 #include "dpc_aknn_algo.h"
 #include "io.h"
@@ -28,10 +28,10 @@ static double wall_time(void) { return (double)clock() / CLOCKS_PER_SEC; }
 
 
 
-/* ─── Hàm main ───────────────────────────────────────────────────────────── */
+/* Program entry point. */
 
 int main(int argc, char** argv) {
-    /* --- Parse tham số --- */
+    /* Parse command-line arguments. */
     const char* input_path  = NULL;
     const char* labels_path = NULL;
     int n_clusters = DEFAULT_N_CLUSTERS;
@@ -70,14 +70,14 @@ int main(int argc, char** argv) {
     io_log("[Config] OpenMP: khong co (bien dich don luong)\n");
 #endif
 
-    /* --- Đọc dữ liệu --- */
+    /* Load the input matrix. */
     io_log("[I/O] Dang doc du lieu: %s ...\n", input_path);
     int n = 0, d = 0;
     real_t* X = io_read_matrix(input_path, &n, &d);
     if (!X) { io_log("[Loi] khong doc duoc %s\n", input_path); io_close_logging(); return 1; }
     io_log("[I/O] Da doc: n=%d mau, d=%d chieu\n", n, d);
 
-    /* --- Khởi tạo và fit --- */
+    /* Initialize and fit the model. */
     DPCAKNNModel model;
     algo_init(&model, n_clusters, k_val);
 
@@ -86,13 +86,13 @@ int main(int argc, char** argv) {
     algo_fit(&model, X, n, d);
     double t_total = wall_time() - t_start;
 
-    /* --- Lưu nhãn --- */
+    /* Save the predicted labels. */
     char out_path[512];
     snprintf(out_path, sizeof(out_path),
              LABELS_DIR "/cpu_labels_%s.csv", io_timestamp());
     algo_save_labels(&model, out_path);
 
-    /* --- In kết quả --- */
+    /* Report the run summary. */
     io_log("\n========================================\n");
     io_log("  KET QUA PHAN CUM - DPC-AKNN (CPU)\n");
     io_log("========================================\n");
@@ -103,7 +103,7 @@ int main(int argc, char** argv) {
     io_log("  Tong thoi gian: %.4f giay\n", t_total);
     io_log("  Ket qua luu : %s\n", out_path);
 
-    /* --- Tính metric nếu có ground-truth --- */
+    /* Evaluate the result when ground-truth labels are available. */
     if (labels_path) {
         int n_gt = 0;
         int* y_true = io_read_labels(labels_path, &n_gt);

@@ -1,9 +1,4 @@
-/*
- * dpc_aknn_algo.h - Giao diện luồng thuật toán DPC-AKNN.
- *
- * Thay đổi: Bỏ trường D (ma trận khoảng cách n×n) khỏi struct.
- *           Thêm X_ref để step3b, step5 tính khoảng cách on-the-fly.
- */
+/* Public orchestration interface for the eight-step DPC-AKNN algorithm. */
 #ifndef DPC_AKNN_ALGO_H
 #define DPC_AKNN_ALGO_H
 
@@ -12,17 +7,16 @@
 typedef struct {
     int      n_clusters;
     int      k;
-    int      n;           /* Số điểm */
-    int      d;           /* Số chiều */
-    int*     labels;      /* Nhãn phân cụm [n] */
-    int*     centers;     /* Chỉ số tâm cụm [n_clusters] */
-    real_t*  rho;         /* Mật độ cục bộ [n] */
-    real_t*  delta;       /* Khoảng cách tương đối [n] */
-    real_t*  gamma;       /* γ = ρ×δ [n] */
-    real_t   d_c;         /* Khoảng cách cắt thích ứng */
-    /* D[n×n] ĐÃ BỎ — tiết kiệm O(n²) bộ nhớ (~39GB cho 70K mẫu) */
-    int*     knn_idx;     /* Chỉ số k láng giềng [n×k] */
-    real_t*  knn_dist;    /* Khoảng cách k láng giềng [n×k] */
+    int      n;           /* Number of points. */
+    int      d;           /* Number of dimensions. */
+    int*     labels;      /* Cluster labels, shape [n]. */
+    int*     centers;     /* Center indices, shape [n_clusters]. */
+    real_t*  rho;         /* Local density values, shape [n]. */
+    real_t*  delta;       /* Relative distance values, shape [n]. */
+    real_t*  gamma;       /* Density-distance scores, shape [n]. */
+    real_t   d_c;         /* Adaptive cutoff distance. */
+    int*     knn_idx;     /* Neighbor indices, shape [n * k]. */
+    real_t*  knn_dist;    /* Neighbor distances, shape [n * k]. */
 } DPCAKNNModel;
 
 void algo_init(DPCAKNNModel* m, int n_clusters, int k);
