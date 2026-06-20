@@ -1,12 +1,13 @@
-# 🚀 DPC-AKNN Parallelization & Optimization / Song song hóa & Tối ưu hóa DPC-AKNN
+# 🚀 DPC-AKNN Parallelization & Optimization (Density Peak Clustering based on Nearest Neighbors) / Song song hóa & Tối ưu hóa DPC-AKNN (Phân cụm Đỉnh Mật độ dựa trên Láng giềng gần nhất)
 
 **Select Language / Chọn Ngôn ngữ:**  
-👉 **[🇺🇸 English Version](#-parallelization-and-optimization-of-the-dpc-aknn-clustering-algorithm-openmp--cuda)** | **[🇻🇳 Bản Tiếng Việt](#-song-song-hóa-và-tối-ưu-hóa-thuật-toán-phân-cụm-dpc-aknn-openmp--cuda)**
+👉 **[🇺🇸 English Version](#-parallelization-and-optimization-of-the-density-peak-clustering-based-on-nearest-neighbors-dpc-aknn-algorithm-openmp--cuda)** | **[🇻🇳 Bản Tiếng Việt](#-song-song-hóa-và-tối-ưu-hóa-thuật-toán-phân-cụm-đỉnh-mật-độ-dựa-trên-láng-giềng-gần-nhất-dpc-aknn-openmp--cuda)**
 
 ---
 
-# 🚀 Parallelization and Optimization of the DPC-AKNN Clustering Algorithm (OpenMP & CUDA)
+# 🚀 Parallelization and Optimization of the Density Peak Clustering based on Nearest Neighbors (DPC-AKNN) Algorithm (OpenMP & CUDA)
 
+[![Algorithm](https://img.shields.io/badge/Algorithm-Density%20Peak%20Clustering%20based%20on%20Nearest%20Neighbors%20%28DPC--AKNN%29-blue.svg)](https://doi.org/10.1016/j.engappai.2024.111981)
 [![C99](https://img.shields.io/badge/Language-C99-blue.svg)](https://en.wikipedia.org/wiki/C99)
 [![CUDA](https://img.shields.io/badge/Parallel-CUDA_C-green.svg)](https://developer.nvidia.com/cuda-zone)
 [![OpenMP](https://img.shields.io/badge/Parallel-OpenMP-orange.svg)](https://www.openmp.org/)
@@ -280,8 +281,9 @@ For a deeper mathematical dive, formulas, and code mappings, check the theoretic
 
 ---
 
-# 🚀 Song song hóa và Tối ưu hóa Thuật toán Phân cụm DPC-AKNN (OpenMP & CUDA)
+# 🚀 Song song hóa và Tối ưu hóa Thuật toán Phân cụm Đỉnh Mật độ dựa trên Láng giềng gần nhất (DPC-AKNN) (OpenMP & CUDA)
 
+[![Thuật toán](https://img.shields.io/badge/Thu%E1%BA%ADt%20to%C3%A1n-Ph%C3%A2n%20c%E1%BB%A5m%20%C4%90%E1%BB%89nh%20M%E1%BA%ADt%20%C4%91%E1%BB%99%20d%E1%BB%B1a%20tr%C3%AAn%20L%C3%A1ng%20gi%E1%BB%81ng%20g%E1%BA%A7n%20nh%E1%BA%A5t%20%28DPC--AKNN%29-blue.svg)](https://doi.org/10.1016/j.engappai.2024.111981)
 [![C99](https://img.shields.io/badge/Language-C99-blue.svg)](https://en.wikipedia.org/wiki/C99)
 [![CUDA](https://img.shields.io/badge/Parallel-CUDA_C-green.svg)](https://developer.nvidia.com/cuda-zone)
 [![OpenMP](https://img.shields.io/badge/Parallel-OpenMP-orange.svg)](https://www.openmp.org/)
